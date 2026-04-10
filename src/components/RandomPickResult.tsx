@@ -2,6 +2,7 @@ interface RandomPickResultProps {
   name: string;
   title: string;
   presentMode: boolean;
+  progress: { current: number; total: number } | null;
   onPickAgain: () => void;
 }
 
@@ -9,6 +10,7 @@ export function RandomPickResult({
   name,
   title,
   presentMode,
+  progress,
   onPickAgain,
 }: RandomPickResultProps) {
   return (
@@ -37,6 +39,15 @@ export function RandomPickResult({
         >
           Selected Student
         </p>
+        {progress && (
+          <p
+            className={`text-sm font-medium tabular-nums mb-3 ${
+              presentMode ? 'text-gray-300' : 'text-gray-500'
+            }`}
+          >
+            {progress.current} / {progress.total}
+          </p>
+        )}
         <p
           className={`font-bold leading-tight ${
             presentMode ? 'text-6xl text-white' : 'text-4xl text-gray-900'

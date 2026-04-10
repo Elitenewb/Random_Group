@@ -1,10 +1,14 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { parseNames, dedupeNames } from './utils/names';
 import { splitIntoGroups, splitBySize } from './utils/groups';
 import { pickRandom } from './utils/shuffle';
-import type { GeneratedGroup, SavedList, ToolMode } from './types';
+import {
+  pickAndRemoveOne,
+  eliminationProgress,
+} from './utils/pickerElimination';
+import type { GeneratedGroup, SavedList, ToolMode, PickMode } from './types';
 import { Header } from './components/Header';
 import { StudentListInput } from './components/StudentListInput';
 import { GroupSettings } from './components/GroupSettings';
@@ -25,11 +29,25 @@ export default function App() {
   const [loadedListId, setLoadedListId] = useState<string | null>(null);
   const [toolMode, setToolMode] = useState<ToolMode>('groups');
   const [pickedStudent, setPickedStudent] = useState<string | null>(null);
+  const [pickMode, setPickMode] = useState<PickMode>('pure');
+  const [eliminationRemaining, setEliminationRemaining] = useState<string[]>(
+    [],
+  );
 
   const parsedNames = useMemo(() => {
     const names = parseNames(state.rawText);
     return state.dedupeEnabled ? dedupeNames(names) : names;
   }, [state.rawText, state.dedupeEnabled]);
+
+  const parsedNamesKey = useMemo(
+    () => JSON.stringify(parsedNames),
+    [parsedNames],
+  );
+
+  useEffect(() => {
+    setEliminationRemaining([]);
+    setPickedStudent(null);
+  }, [parsedNamesKey]);
 
   const studentCount = parsedNames.length;
 
@@ -64,10 +82,45 @@ export default function App() {
     setGroups(result);
   }, [canGenerate, parsedNames, state.groupCount, state.groupMode]);
 
+  const handlePickModeChange = useCallback((mode: PickMode) => {
+    setPickMode(mode);
+    setEliminationRemaining([]);
+    setPickedStudent(null);
+  }, []);
+
   const handlePickStudent = useCallback(() => {
     if (studentCount < 1) return;
-    setPickedStudent(pickRandom(parsedNames));
-  }, [parsedNames, studentCount]);
+    if (pickMode === 'pure') {
+      setPickedStudent(pickRandom(parsedNames));
+      return;
+    }
+    const pool =
+      eliminationRemaining.length > 0 ? eliminationRemaining : [...parsedNames];
+    const { picked, nextRemaining } = pickAndRemoveOne(pool);
+    setEliminationRemaining(nextRemaining);
+    setPickedStudent(picked);
+  }, [
+    studentCount,
+    pickMode,
+    parsedNames,
+    eliminationRemaining,
+  ]);
+
+  const pickProgress = useMemo(() => {
+    if (
+      pickMode !== 'eliminate' ||
+      pickedStudent === null ||
+      studentCount < 1
+    ) {
+      return null;
+    }
+    return eliminationProgress(studentCount, eliminationRemaining);
+  }, [
+    pickMode,
+    pickedStudent,
+    studentCount,
+    eliminationRemaining,
+  ]);
 
   const handleSaveList = useCallback(
     (name: string) => {
@@ -200,6 +253,43 @@ export default function App() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      Pick style
+                    </label>
+                    <div className="flex rounded-lg border border-gray-300 p-0.5 bg-gray-50">
+                      <button
+                        type="button"
+                        onClick={() => handlePickModeChange('pure')}
+                        className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                          pickMode === 'pure'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Pure random
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePickModeChange('eliminate')}
+                        className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                          pickMode === 'eliminate'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Eliminate
+                      </button>
+                    </div>
+                    {pickMode === 'eliminate' && (
+                      <p className="mt-2 text-xs text-gray-500">
+                        Each student is picked once per round; progress shows
+                        how many have been chosen. A new round starts after
+                        everyone has been picked.
+                      </p>
+                    )}
+                  </div>
+
                   {studentCount < 1 && (
                     <p className="text-sm text-amber-600">
                       Add at least 1 student to pick.
@@ -242,6 +332,7 @@ export default function App() {
                 name={pickedStudent}
                 title={state.title}
                 presentMode={presentMode}
+                progress={pickProgress}
                 onPickAgain={handlePickStudent}
               />
             )}

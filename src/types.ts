@@ -15,6 +15,8 @@ export type GroupMode = 'byGroups' | 'bySize';
 
 export type ToolMode = 'groups' | 'picker';
 
+export type PickMode = 'pure' | 'eliminate';
+
 export interface AppState {
   title: string;
   rawText: string;
