@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .group-card {
+    break-inside: avoid;
+    border: 1px solid #d1d5db;
+    box-shadow: none !important;
+  }
+}

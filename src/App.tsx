@@ -1,0 +1,198 @@
+import { useState, useMemo, useCallback } from 'react';
+import { useAppState } from './hooks/useAppState';
+import { useLocalStorage } from './hooks/useLocalStorage';
+import { parseNames, dedupeNames } from './utils/names';
+import { splitIntoGroups, splitBySize } from './utils/groups';
+import type { GeneratedGroup, SavedList } from './types';
+import { Header } from './components/Header';
+import { StudentListInput } from './components/StudentListInput';
+import { GroupSettings } from './components/GroupSettings';
+import { SavedListsPanel } from './components/SavedListsPanel';
+import { GroupResults } from './components/GroupResults';
+import { Toolbar } from './components/Toolbar';
+
+export default function App() {
+  const { state, updateState } = useAppState();
+  const [groups, setGroups] = useState<GeneratedGroup[]>([]);
+  const [presentMode, setPresentMode] = useState(false);
+  const [savedLists, setSavedLists] = useLocalStorage<SavedList[]>(
+    'rgg-saved-lists',
+    [],
+  );
+  const [loadedListId, setLoadedListId] = useState<string | null>(null);
+
+  const parsedNames = useMemo(() => {
+    const names = parseNames(state.rawText);
+    return state.dedupeEnabled ? dedupeNames(names) : names;
+  }, [state.rawText, state.dedupeEnabled]);
+
+  const studentCount = parsedNames.length;
+
+  const canGenerate = useMemo(() => {
+    if (studentCount < 2) return false;
+    if (state.groupMode === 'byGroups') {
+      return state.groupCount >= 2 && state.groupCount <= studentCount;
+    }
+    return state.groupCount >= 1 && state.groupCount <= studentCount;
+  }, [studentCount, state.groupCount, state.groupMode]);
+
+  const validationMessage = useMemo(() => {
+    if (studentCount < 2) return 'Add at least 2 students to generate groups.';
+    if (state.groupMode === 'byGroups') {
+      if (state.groupCount > studentCount)
+        return 'Number of groups cannot exceed number of students.';
+      if (state.groupCount < 2) return 'Need at least 2 groups.';
+    } else {
+      if (state.groupCount < 1) return 'Group size must be at least 1.';
+      if (state.groupCount > studentCount)
+        return 'Group size cannot exceed number of students.';
+    }
+    return null;
+  }, [studentCount, state.groupCount, state.groupMode]);
+
+  const handleGenerate = useCallback(() => {
+    if (!canGenerate) return;
+    const result =
+      state.groupMode === 'byGroups'
+        ? splitIntoGroups(parsedNames, state.groupCount)
+        : splitBySize(parsedNames, state.groupCount);
+    setGroups(result);
+  }, [canGenerate, parsedNames, state.groupCount, state.groupMode]);
+
+  const handleSaveList = useCallback(
+    (name: string) => {
+      const existing = savedLists.find(
+        (l) => l.name.toLowerCase() === name.toLowerCase(),
+      );
+      const now = Date.now();
+      if (existing) {
+        const updated: SavedList = {
+          ...existing,
+          names: parsedNames,
+          updatedAt: now,
+        };
+        setSavedLists((prev) =>
+          prev.map((l) => (l.id === existing.id ? updated : l)),
+        );
+        setLoadedListId(existing.id);
+      } else {
+        const id = crypto.randomUUID();
+        const newList: SavedList = {
+          id,
+          name,
+          names: parsedNames,
+          createdAt: now,
+          updatedAt: now,
+        };
+        setSavedLists((prev) => [...prev, newList]);
+        setLoadedListId(id);
+      }
+    },
+    [parsedNames, savedLists, setSavedLists],
+  );
+
+  const handleLoadList = useCallback(
+    (list: SavedList) => {
+      updateState({ rawText: list.names.join('\n') });
+      setLoadedListId(list.id);
+    },
+    [updateState],
+  );
+
+  const handleDeleteList = useCallback(
+    (id: string) => {
+      setSavedLists((prev) => prev.filter((l) => l.id !== id));
+      if (loadedListId === id) setLoadedListId(null);
+    },
+    [setSavedLists, loadedListId],
+  );
+
+  return (
+    <div
+      className={`min-h-screen transition-colors duration-200 ${
+        presentMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'
+      }`}
+    >
+      <Header
+        presentMode={presentMode}
+        onTogglePresentMode={() => setPresentMode((p) => !p)}
+      />
+
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div
+          className={`grid gap-6 ${
+            presentMode
+              ? ''
+              : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]'
+          }`}
+        >
+          {!presentMode && (
+            <div className="space-y-6 no-print">
+              <StudentListInput
+                rawText={state.rawText}
+                onChangeRawText={(t) => updateState({ rawText: t })}
+                studentCount={studentCount}
+                dedupeEnabled={state.dedupeEnabled}
+                onToggleDedupe={(v) => updateState({ dedupeEnabled: v })}
+              />
+
+              <SavedListsPanel
+                savedLists={savedLists}
+                loadedListId={loadedListId}
+                defaultName={state.title || 'Untitled'}
+                onSave={handleSaveList}
+                onLoad={handleLoadList}
+                onDelete={handleDeleteList}
+              />
+
+              <GroupSettings
+                title={state.title}
+                onChangeTitle={(t) => updateState({ title: t })}
+                groupMode={state.groupMode}
+                onChangeGroupMode={(m) => updateState({ groupMode: m })}
+                groupCount={state.groupCount}
+                onChangeGroupCount={(n) => updateState({ groupCount: n })}
+                studentCount={studentCount}
+                canGenerate={canGenerate}
+                validationMessage={validationMessage}
+                hasGroups={groups.length > 0}
+                onGenerate={handleGenerate}
+              />
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {groups.length > 0 && (
+              <>
+                <GroupResults
+                  groups={groups}
+                  title={state.title}
+                  presentMode={presentMode}
+                />
+                <Toolbar
+                  groups={groups}
+                  title={state.title}
+                  presentMode={presentMode}
+                  onRegenerate={handleGenerate}
+                />
+              </>
+            )}
+
+            {groups.length === 0 && !presentMode && (
+              <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-gray-400">
+                <p className="text-center text-sm">
+                  Configure your settings and click
+                  <br />
+                  <span className="font-medium text-gray-500">
+                    Generate Groups
+                  </span>{' '}
+                  to get started.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
