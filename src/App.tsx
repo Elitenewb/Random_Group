@@ -209,22 +209,6 @@ export default function App() {
                 onLoad={handleLoadList}
                 onDelete={handleDeleteList}
               />
-
-              {toolMode === 'groups' && (
-                <GroupSettings
-                  title={state.title}
-                  onChangeTitle={(t) => updateState({ title: t })}
-                  groupMode={state.groupMode}
-                  onChangeGroupMode={(m) => updateState({ groupMode: m })}
-                  groupCount={state.groupCount}
-                  onChangeGroupCount={(n) => updateState({ groupCount: n })}
-                  studentCount={studentCount}
-                  canGenerate={canGenerate}
-                  validationMessage={validationMessage}
-                  hasGroups={groups.length > 0}
-                  onGenerate={handleGenerate}
-                />
-              )}
             </div>
           )}
 
@@ -348,23 +332,35 @@ export default function App() {
               />
             )}
 
-            {!hasGroupResults &&
-              toolMode === 'groups' &&
-              !presentMode && (
-              <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-gray-400">
-                <p className="text-center text-sm">
-                  Configure your settings and click
-                  <br />
-                  <span className="font-medium text-gray-500">
-                    Generate Groups
-                  </span>{' '}
-                  to get started.
-                </p>
-              </div>
-            )}
-
             {toolMode === 'groups' && !presentMode && (
-              <div className="no-print mx-auto w-full max-w-xl">
+              <div className="no-print mx-auto w-full max-w-xl space-y-6">
+                {!hasGroupResults && (
+                  <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-gray-400">
+                    <p className="text-center text-sm">
+                      Configure your settings and click
+                      <br />
+                      <span className="font-medium text-gray-500">
+                        Generate Groups
+                      </span>{' '}
+                      to get started.
+                    </p>
+                  </div>
+                )}
+
+                <GroupSettings
+                  title={state.title}
+                  onChangeTitle={(t) => updateState({ title: t })}
+                  groupMode={state.groupMode}
+                  onChangeGroupMode={(m) => updateState({ groupMode: m })}
+                  groupCount={state.groupCount}
+                  onChangeGroupCount={(n) => updateState({ groupCount: n })}
+                  studentCount={studentCount}
+                  canGenerate={canGenerate}
+                  validationMessage={validationMessage}
+                  hasGroups={groups.length > 0}
+                  onGenerate={handleGenerate}
+                />
+
                 <ModeSwitcher mode={toolMode} onChangeMode={setToolMode} />
               </div>
             )}
