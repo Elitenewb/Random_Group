@@ -1,8 +1,13 @@
+# Publishes the Vite production build to GitHub Pages (Source: GitHub Actions).
+# Note: npm ci skips devDependencies when NODE_ENV=production, which would omit
+# Vite/TypeScript/Tailwind and break the build — use --include=dev.
+
 name: Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,14 +26,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund --include=dev
 
-      - name: Build
-        run: npm run build
+      - name: Typecheck
+        run: npx tsc -b --pretty false
+
+      - name: Production build
+        run: npx vite build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

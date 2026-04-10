@@ -15,11 +15,24 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 Live site: [https://elitenewb.github.io/Random_Group/](https://elitenewb.github.io/Random_Group/)
 
-The production build uses Vite `base: '/Random_Group/'` so asset URLs match the project-page path. Pushes to `main` run [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml), which builds `dist/` and publishes it with **GitHub Actions** (no extra branch to pick).
+The production build uses Vite `base: '/Random_Group/'` so asset URLs match the project-page path. Pushes to `main` run [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml).
 
-**One-time Pages setup (recommended):** Repo **Settings** → **Pages** → **Build and deployment** → **Source:** choose **GitHub Actions** (not “Deploy from a branch”). You do **not** select `main` or `gh-pages` here—GitHub uses the workflow artifact. Save, then ensure the **Deploy to GitHub Pages** workflow run completes (Actions tab).
+### Settings (once)
 
-**Why you might only see `main`:** That happens under **Deploy from a branch**, which lists existing branches. A **`gh-pages`** branch only appears after a tool has created it (e.g. a branch-based deploy). With **GitHub Actions** as the source, branch pickers are not used for publishing.
+**Settings** → **Pages** → **Build and deployment** → **Source:** **GitHub Actions**. Ignore the suggested “Jekyll” / “Static HTML” cards; this repo already has a workflow under `.github/workflows/`.
+
+### Two workflows in the Actions tab (normal)
+
+| Name | What it is |
+|------|------------|
+| **Deploy to GitHub Pages** | *Your* workflow: installs deps, builds `dist/`, uploads the site. This one must succeed. |
+| **pages build deployment** | GitHub’s follow-up job that takes the uploaded artifact and publishes it. It runs after the deploy job succeeds. |
+
+If **Deploy to GitHub Pages** fails at **Install** or **Build**, the site will not update. A common CI pitfall is `NODE_ENV=production` causing `npm ci` to skip **devDependencies** (no Vite/TypeScript); this workflow uses `npm ci --include=dev` to avoid that.
+
+### Branch deploy vs Actions
+
+Under **Deploy from a branch**, you only see branches that exist (often just `main`). This project is set up for **GitHub Actions** as the source, so you do not need a `gh-pages` branch.
 
 To verify a production build locally: `npm run build && npm run preview`, then open [http://localhost:4173/Random_Group/](http://localhost:4173/Random_Group/).
 
