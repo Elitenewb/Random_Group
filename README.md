@@ -15,9 +15,9 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 Live site: [https://elitenewb.github.io/Random_Group/](https://elitenewb.github.io/Random_Group/)
 
-The production build uses Vite `base: '/Random_Group/'` so asset URLs match the project-page path. Pushes to `main` run [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml), which uploads `dist/` to GitHub Pages.
+The production build uses Vite `base: '/Random_Group/'` so asset URLs match the project-page path. Pushes to `main` run [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml), which builds `dist/` and pushes it to the **`gh-pages`** branch.
 
-**One-time repo setup:** Settings → Pages → Build and deployment → **Source: GitHub Actions** (not “Deploy from a branch”). After the first workflow run succeeds, the site updates on each push to `main`.
+**One-time repo setup:** Settings → Pages → Build and deployment → **Source: Deploy from a branch** → Branch **`gh-pages`** → folder **`/`** (root). Save. After the first workflow run finishes, the site should appear at the URL above.
 
 To verify a production build locally: `npm run build && npm run preview`, then open [http://localhost:4173/Random_Group/](http://localhost:4173/Random_Group/).
 
