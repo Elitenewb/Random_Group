@@ -15,9 +15,11 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 Live site: [https://elitenewb.github.io/Random_Group/](https://elitenewb.github.io/Random_Group/)
 
-The production build uses Vite `base: '/Random_Group/'` so asset URLs match the project-page path. Pushes to `main` run [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml), which builds `dist/` and pushes it to the **`gh-pages`** branch.
+The production build uses Vite `base: '/Random_Group/'` so asset URLs match the project-page path. Pushes to `main` run [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml), which builds `dist/` and publishes it with **GitHub Actions** (no extra branch to pick).
 
-**One-time repo setup:** Settings → Pages → Build and deployment → **Source: Deploy from a branch** → Branch **`gh-pages`** → folder **`/`** (root). Save. After the first workflow run finishes, the site should appear at the URL above.
+**One-time Pages setup (recommended):** Repo **Settings** → **Pages** → **Build and deployment** → **Source:** choose **GitHub Actions** (not “Deploy from a branch”). You do **not** select `main` or `gh-pages` here—GitHub uses the workflow artifact. Save, then ensure the **Deploy to GitHub Pages** workflow run completes (Actions tab).
+
+**Why you might only see `main`:** That happens under **Deploy from a branch**, which lists existing branches. A **`gh-pages`** branch only appears after a tool has created it (e.g. a branch-based deploy). With **GitHub Actions** as the source, branch pickers are not used for publishing.
 
 To verify a production build locally: `npm run build && npm run preview`, then open [http://localhost:4173/Random_Group/](http://localhost:4173/Random_Group/).
 
