@@ -209,6 +209,8 @@ export default function App() {
                 onLoad={handleLoadList}
                 onDelete={handleDeleteList}
               />
+
+              <ModeSwitcher mode={toolMode} onChangeMode={setToolMode} />
             </div>
           )}
 
@@ -315,8 +317,6 @@ export default function App() {
                       : 'Pick Random Student'}
                   </button>
                 </div>
-
-                <ModeSwitcher mode={toolMode} onChangeMode={setToolMode} />
               </div>
             )}
 
@@ -360,8 +360,6 @@ export default function App() {
                   hasGroups={groups.length > 0}
                   onGenerate={handleGenerate}
                 />
-
-                <ModeSwitcher mode={toolMode} onChangeMode={setToolMode} />
               </div>
             )}
           </div>
