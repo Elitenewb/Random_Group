@@ -171,8 +171,6 @@ export default function App() {
   );
 
   const hasGroupResults = toolMode === 'groups' && groups.length > 0;
-  const hasPickResult = toolMode === 'picker' && pickedStudent !== null;
-  const hasAnyResult = hasGroupResults || hasPickResult;
 
   return (
     <div
@@ -212,8 +210,6 @@ export default function App() {
                 onDelete={handleDeleteList}
               />
 
-              <ModeSwitcher mode={toolMode} onChangeMode={setToolMode} />
-
               {toolMode === 'groups' && (
                 <GroupSettings
                   title={state.title}
@@ -229,8 +225,37 @@ export default function App() {
                   onGenerate={handleGenerate}
                 />
               )}
+            </div>
+          )}
 
-              {toolMode === 'picker' && (
+          <div className="space-y-4">
+            {hasGroupResults && (
+              <>
+                <GroupResults
+                  groups={groups}
+                  title={state.title}
+                  presentMode={presentMode}
+                />
+                <Toolbar
+                  groups={groups}
+                  title={state.title}
+                  presentMode={presentMode}
+                  onRegenerate={handleGenerate}
+                />
+              </>
+            )}
+
+            {toolMode === 'picker' && !presentMode && (
+              <div className="no-print mx-auto w-full max-w-xl space-y-6">
+                <RandomPickResult
+                  name={pickedStudent}
+                  title={state.title}
+                  presentMode={false}
+                  progress={pickProgress}
+                  onPickAgain={handlePickStudent}
+                  showInlinePickAgain={false}
+                />
+
                 <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4">
                   <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Random Pick
@@ -306,60 +331,41 @@ export default function App() {
                       : 'Pick Random Student'}
                   </button>
                 </div>
-              )}
-            </div>
-          )}
 
-          <div className="space-y-4">
-            {hasGroupResults && (
-              <>
-                <GroupResults
-                  groups={groups}
-                  title={state.title}
-                  presentMode={presentMode}
-                />
-                <Toolbar
-                  groups={groups}
-                  title={state.title}
-                  presentMode={presentMode}
-                  onRegenerate={handleGenerate}
-                />
-              </>
+                <ModeSwitcher mode={toolMode} onChangeMode={setToolMode} />
+              </div>
             )}
 
-            {hasPickResult && (
+            {toolMode === 'picker' &&
+              presentMode &&
+              pickedStudent !== null && (
               <RandomPickResult
                 name={pickedStudent}
                 title={state.title}
-                presentMode={presentMode}
+                presentMode
                 progress={pickProgress}
                 onPickAgain={handlePickStudent}
               />
             )}
 
-            {!hasAnyResult && !presentMode && (
+            {!hasGroupResults &&
+              toolMode === 'groups' &&
+              !presentMode && (
               <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-gray-400">
                 <p className="text-center text-sm">
-                  {toolMode === 'groups' ? (
-                    <>
-                      Configure your settings and click
-                      <br />
-                      <span className="font-medium text-gray-500">
-                        Generate Groups
-                      </span>{' '}
-                      to get started.
-                    </>
-                  ) : (
-                    <>
-                      Add students and click
-                      <br />
-                      <span className="font-medium text-gray-500">
-                        Pick Random Student
-                      </span>{' '}
-                      to select one.
-                    </>
-                  )}
+                  Configure your settings and click
+                  <br />
+                  <span className="font-medium text-gray-500">
+                    Generate Groups
+                  </span>{' '}
+                  to get started.
                 </p>
+              </div>
+            )}
+
+            {toolMode === 'groups' && !presentMode && (
+              <div className="no-print mx-auto w-full max-w-xl">
+                <ModeSwitcher mode={toolMode} onChangeMode={setToolMode} />
               </div>
             )}
           </div>
