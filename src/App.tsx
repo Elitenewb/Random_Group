@@ -3,13 +3,16 @@ import { useAppState } from './hooks/useAppState';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { parseNames, dedupeNames } from './utils/names';
 import { splitIntoGroups, splitBySize } from './utils/groups';
-import type { GeneratedGroup, SavedList } from './types';
+import { pickRandom } from './utils/shuffle';
+import type { GeneratedGroup, SavedList, ToolMode } from './types';
 import { Header } from './components/Header';
 import { StudentListInput } from './components/StudentListInput';
 import { GroupSettings } from './components/GroupSettings';
 import { SavedListsPanel } from './components/SavedListsPanel';
 import { GroupResults } from './components/GroupResults';
 import { Toolbar } from './components/Toolbar';
+import { ModeSwitcher } from './components/ModeSwitcher';
+import { RandomPickResult } from './components/RandomPickResult';
 
 export default function App() {
   const { state, updateState } = useAppState();
@@ -20,6 +23,8 @@ export default function App() {
     [],
   );
   const [loadedListId, setLoadedListId] = useState<string | null>(null);
+  const [toolMode, setToolMode] = useState<ToolMode>('groups');
+  const [pickedStudent, setPickedStudent] = useState<string | null>(null);
 
   const parsedNames = useMemo(() => {
     const names = parseNames(state.rawText);
@@ -58,6 +63,11 @@ export default function App() {
         : splitBySize(parsedNames, state.groupCount);
     setGroups(result);
   }, [canGenerate, parsedNames, state.groupCount, state.groupMode]);
+
+  const handlePickStudent = useCallback(() => {
+    if (studentCount < 1) return;
+    setPickedStudent(pickRandom(parsedNames));
+  }, [parsedNames, studentCount]);
 
   const handleSaveList = useCallback(
     (name: string) => {
@@ -107,6 +117,10 @@ export default function App() {
     [setSavedLists, loadedListId],
   );
 
+  const hasGroupResults = toolMode === 'groups' && groups.length > 0;
+  const hasPickResult = toolMode === 'picker' && pickedStudent !== null;
+  const hasAnyResult = hasGroupResults || hasPickResult;
+
   return (
     <div
       className={`min-h-screen transition-colors duration-200 ${
@@ -145,24 +159,69 @@ export default function App() {
                 onDelete={handleDeleteList}
               />
 
-              <GroupSettings
-                title={state.title}
-                onChangeTitle={(t) => updateState({ title: t })}
-                groupMode={state.groupMode}
-                onChangeGroupMode={(m) => updateState({ groupMode: m })}
-                groupCount={state.groupCount}
-                onChangeGroupCount={(n) => updateState({ groupCount: n })}
-                studentCount={studentCount}
-                canGenerate={canGenerate}
-                validationMessage={validationMessage}
-                hasGroups={groups.length > 0}
-                onGenerate={handleGenerate}
-              />
+              <ModeSwitcher mode={toolMode} onChangeMode={setToolMode} />
+
+              {toolMode === 'groups' && (
+                <GroupSettings
+                  title={state.title}
+                  onChangeTitle={(t) => updateState({ title: t })}
+                  groupMode={state.groupMode}
+                  onChangeGroupMode={(m) => updateState({ groupMode: m })}
+                  groupCount={state.groupCount}
+                  onChangeGroupCount={(n) => updateState({ groupCount: n })}
+                  studentCount={studentCount}
+                  canGenerate={canGenerate}
+                  validationMessage={validationMessage}
+                  hasGroups={groups.length > 0}
+                  onGenerate={handleGenerate}
+                />
+              )}
+
+              {toolMode === 'picker' && (
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4">
+                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                    Random Pick
+                  </h2>
+
+                  <div>
+                    <label
+                      htmlFor="pick-title"
+                      className="block text-sm font-medium text-gray-600 mb-1"
+                    >
+                      Title
+                    </label>
+                    <input
+                      id="pick-title"
+                      type="text"
+                      value={state.title}
+                      onChange={(e) => updateState({ title: e.target.value })}
+                      placeholder="e.g. Period 3 - English"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  {studentCount < 1 && (
+                    <p className="text-sm text-amber-600">
+                      Add at least 1 student to pick.
+                    </p>
+                  )}
+
+                  <button
+                    onClick={handlePickStudent}
+                    disabled={studentCount < 1}
+                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  >
+                    {pickedStudent !== null
+                      ? 'Pick Again'
+                      : 'Pick Random Student'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
           <div className="space-y-4">
-            {groups.length > 0 && (
+            {hasGroupResults && (
               <>
                 <GroupResults
                   groups={groups}
@@ -178,15 +237,37 @@ export default function App() {
               </>
             )}
 
-            {groups.length === 0 && !presentMode && (
+            {hasPickResult && (
+              <RandomPickResult
+                name={pickedStudent}
+                title={state.title}
+                presentMode={presentMode}
+                onPickAgain={handlePickStudent}
+              />
+            )}
+
+            {!hasAnyResult && !presentMode && (
               <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-gray-400">
                 <p className="text-center text-sm">
-                  Configure your settings and click
-                  <br />
-                  <span className="font-medium text-gray-500">
-                    Generate Groups
-                  </span>{' '}
-                  to get started.
+                  {toolMode === 'groups' ? (
+                    <>
+                      Configure your settings and click
+                      <br />
+                      <span className="font-medium text-gray-500">
+                        Generate Groups
+                      </span>{' '}
+                      to get started.
+                    </>
+                  ) : (
+                    <>
+                      Add students and click
+                      <br />
+                      <span className="font-medium text-gray-500">
+                        Pick Random Student
+                      </span>{' '}
+                      to select one.
+                    </>
+                  )}
                 </p>
               </div>
             )}

@@ -13,6 +13,8 @@ export interface GeneratedGroup {
 
 export type GroupMode = 'byGroups' | 'bySize';
 
+export type ToolMode = 'groups' | 'picker';
+
 export interface AppState {
   title: string;
   rawText: string;

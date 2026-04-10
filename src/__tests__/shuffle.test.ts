@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fisherYatesShuffle } from '../utils/shuffle';
+import { fisherYatesShuffle, pickRandom } from '../utils/shuffle';
 
 describe('fisherYatesShuffle', () => {
   const input = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
@@ -26,5 +26,18 @@ describe('fisherYatesShuffle', () => {
 
   it('handles single element', () => {
     expect(fisherYatesShuffle(['X'])).toEqual(['X']);
+  });
+});
+
+describe('pickRandom', () => {
+  it('returns an element from the input array', () => {
+    const input = ['A', 'B', 'C', 'D', 'E'];
+    for (let i = 0; i < 50; i++) {
+      expect(input).toContain(pickRandom(input));
+    }
+  });
+
+  it('returns the only element for a single-element array', () => {
+    expect(pickRandom(['Only'])).toBe('Only');
   });
 });
