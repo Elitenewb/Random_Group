@@ -11,6 +11,16 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
+## GitHub Pages
+
+Live site: [https://elitenewb.github.io/Random_Group/](https://elitenewb.github.io/Random_Group/)
+
+The production build uses Vite `base: '/Random_Group/'` so asset URLs match the project-page path. Pushes to `main` run [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml), which uploads `dist/` to GitHub Pages.
+
+**One-time repo setup:** Settings → Pages → Build and deployment → **Source: GitHub Actions** (not “Deploy from a branch”). After the first workflow run succeeds, the site updates on each push to `main`.
+
+To verify a production build locally: `npm run build && npm run preview`, then open [http://localhost:4173/Random_Group/](http://localhost:4173/Random_Group/).
+
 ## Scripts
 
 | Command | Description |
