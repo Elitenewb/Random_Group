@@ -101,24 +101,54 @@ function pickEligibleGroup(
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
+export interface QualifierConflict {
+  qualifier: string;
+  count: number;
+}
+
 function distributeQualifiedBuckets(
   qualified: Map<string, ParsedName[]>,
   groups: PlacementGroup[],
-  extraEligibility?: (g: PlacementGroup) => boolean,
+  options: {
+    extraEligibility?: (g: PlacementGroup) => boolean;
+    bestEffort?: boolean;
+    conflicts?: Map<string, number>;
+  } = {},
 ): void {
+  const { extraEligibility, bestEffort, conflicts } = options;
   const buckets = Array.from(qualified.entries()).sort(
     (a, b) => b[1].length - a[1].length,
   );
   for (const [qualifier, members] of buckets) {
     const shuffled = fisherYatesShuffle(members);
     for (const member of shuffled) {
-      const idx = pickEligibleGroup(groups, (g) => {
+      let idx = pickEligibleGroup(groups, (g) => {
         if (g.qualifiers.has(qualifier)) return false;
         if (extraEligibility && !extraEligibility(g)) return false;
         return true;
       });
       if (idx === -1) {
-        throw new QualifierConflictError(qualifier, members.length, groups.length);
+        if (!bestEffort) {
+          throw new QualifierConflictError(
+            qualifier,
+            members.length,
+            groups.length,
+          );
+        }
+        idx = pickEligibleGroup(groups, (g) => {
+          if (extraEligibility && !extraEligibility(g)) return false;
+          return true;
+        });
+        if (idx === -1) {
+          throw new QualifierConflictError(
+            qualifier,
+            members.length,
+            groups.length,
+          );
+        }
+        if (conflicts) {
+          conflicts.set(qualifier, (conflicts.get(qualifier) ?? 0) + 1);
+        }
       }
       groups[idx].students.push(member.display);
       groups[idx].qualifiers.add(qualifier);
@@ -147,6 +177,14 @@ function finalize(groups: PlacementGroup[]): GeneratedGroup[] {
     label: `Group ${i + 1}`,
     students: g.students,
   }));
+}
+
+function conflictsMapToArray(
+  conflicts: Map<string, number>,
+): QualifierConflict[] {
+  return Array.from(conflicts.entries())
+    .map(([qualifier, count]) => ({ qualifier, count }))
+    .sort((a, b) => b.count - a.count || a.qualifier.localeCompare(b.qualifier));
 }
 
 export function splitIntoGroups(
@@ -187,7 +225,55 @@ export function splitBySize(
     qualifiers: new Set<string>(),
   }));
   const hasCapacity = (g: PlacementGroup) => g.students.length < size;
-  distributeQualifiedBuckets(qualified, groups, hasCapacity);
+  distributeQualifiedBuckets(qualified, groups, {
+    extraEligibility: hasCapacity,
+  });
   distributeUnqualified(unqualified, groups, hasCapacity);
   return finalize(groups);
+}
+
+export function splitIntoGroupsBestEffort(
+  students: ParsedName[],
+  count: number,
+): { groups: GeneratedGroup[]; conflicts: QualifierConflict[] } {
+  const { qualified, unqualified } = bucketByQualifier(students);
+  const groups: PlacementGroup[] = Array.from({ length: count }, () => ({
+    students: [],
+    qualifiers: new Set<string>(),
+  }));
+  const conflicts = new Map<string, number>();
+  distributeQualifiedBuckets(qualified, groups, {
+    bestEffort: true,
+    conflicts,
+  });
+  distributeUnqualified(unqualified, groups);
+  return {
+    groups: finalize(groups),
+    conflicts: conflictsMapToArray(conflicts),
+  };
+}
+
+export function splitBySizeBestEffort(
+  students: ParsedName[],
+  size: number,
+): { groups: GeneratedGroup[]; conflicts: QualifierConflict[] } {
+  if (students.length === 0) return { groups: [], conflicts: [] };
+  const numGroups = Math.ceil(students.length / size);
+  const { qualified, unqualified } = bucketByQualifier(students);
+  const groups: PlacementGroup[] = Array.from({ length: numGroups }, () => ({
+    students: [],
+    qualifiers: new Set<string>(),
+  }));
+  const hasCapacity = (g: PlacementGroup) => g.students.length < size;
+  const conflicts = new Map<string, number>();
+  distributeQualifiedBuckets(qualified, groups, {
+    extraEligibility: hasCapacity,
+    bestEffort: true,
+    conflicts,
+  });
+  distributeUnqualified(unqualified, groups, hasCapacity);
+  return {
+    groups: finalize(groups),
+    conflicts: conflictsMapToArray(conflicts),
+  };
 }

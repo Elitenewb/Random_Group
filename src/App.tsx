@@ -5,7 +5,10 @@ import { parseNames, dedupeNames } from './utils/names';
 import {
   splitIntoGroups,
   splitBySize,
+  splitIntoGroupsBestEffort,
+  splitBySizeBestEffort,
   analyzeQualifierFeasibility,
+  type QualifierConflict,
 } from './utils/groups';
 import { pickRandom } from './utils/shuffle';
 import {
@@ -25,6 +28,7 @@ import { RandomPickResult } from './components/RandomPickResult';
 export default function App() {
   const { state, updateState } = useAppState();
   const [groups, setGroups] = useState<GeneratedGroup[]>([]);
+  const [conflicts, setConflicts] = useState<QualifierConflict[]>([]);
   const [presentMode, setPresentMode] = useState(false);
   const [savedLists, setSavedLists] = useLocalStorage<SavedList[]>(
     'rgg-saved-lists',
@@ -51,6 +55,7 @@ export default function App() {
   useEffect(() => {
     setEliminationRemaining([]);
     setPickedStudent(null);
+    setConflicts([]);
   }, [parsedNamesKey]);
 
   const studentCount = parsedNames.length;
@@ -98,6 +103,17 @@ export default function App() {
     return null;
   }, [studentCount, state.groupCount, state.groupMode, qualifierFeasibility]);
 
+  const qualifierBlocked = !qualifierFeasibility.ok;
+
+  const canGenerateBestEffort = useMemo(() => {
+    if (!qualifierBlocked) return false;
+    if (studentCount < 2) return false;
+    if (state.groupMode === 'byGroups') {
+      return state.groupCount >= 2 && state.groupCount <= studentCount;
+    }
+    return state.groupCount >= 1 && state.groupCount <= studentCount;
+  }, [qualifierBlocked, studentCount, state.groupCount, state.groupMode]);
+
   const handleGenerate = useCallback(() => {
     if (!canGenerate) return;
     const result =
@@ -105,7 +121,23 @@ export default function App() {
         ? splitIntoGroups(parsedNames, state.groupCount)
         : splitBySize(parsedNames, state.groupCount);
     setGroups(result);
+    setConflicts([]);
   }, [canGenerate, parsedNames, state.groupCount, state.groupMode]);
+
+  const handleGenerateBestEffort = useCallback(() => {
+    if (!canGenerateBestEffort) return;
+    const result =
+      state.groupMode === 'byGroups'
+        ? splitIntoGroupsBestEffort(parsedNames, state.groupCount)
+        : splitBySizeBestEffort(parsedNames, state.groupCount);
+    setGroups(result.groups);
+    setConflicts(result.conflicts);
+  }, [
+    canGenerateBestEffort,
+    parsedNames,
+    state.groupCount,
+    state.groupMode,
+  ]);
 
   const handlePickModeChange = useCallback((mode: PickMode) => {
     setPickMode(mode);
@@ -254,6 +286,7 @@ export default function App() {
                   groups={groups}
                   title={state.title}
                   presentMode={presentMode}
+                  conflicts={conflicts}
                 />
                 <Toolbar
                   groups={groups}
@@ -392,6 +425,8 @@ export default function App() {
                   validationMessage={validationMessage}
                   hasGroups={groups.length > 0}
                   onGenerate={handleGenerate}
+                  qualifierBlocked={qualifierBlocked && canGenerateBestEffort}
+                  onGenerateBestEffort={handleGenerateBestEffort}
                 />
               </div>
             )}

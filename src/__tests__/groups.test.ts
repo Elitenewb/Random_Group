@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   splitIntoGroups,
   splitBySize,
+  splitIntoGroupsBestEffort,
+  splitBySizeBestEffort,
   analyzeQualifierFeasibility,
   QualifierConflictError,
 } from '../utils/groups';
@@ -254,5 +256,100 @@ describe('analyzeQualifierFeasibility', () => {
       count: 3,
       maxAllowed: 2,
     });
+  });
+});
+
+describe('splitIntoGroupsBestEffort', () => {
+  it('returns the requested number of groups even when a bucket overflows', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+    ];
+    const { groups, conflicts } = splitIntoGroupsBestEffort(students, 2);
+    expect(groups).toHaveLength(2);
+    expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3']);
+    expect(conflicts).toEqual([{ qualifier: 'A', count: 1 }]);
+  });
+
+  it('reports only qualifiers that actually overflow', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+      { display: 'A4', qualifier: 'A' },
+      { display: 'A5', qualifier: 'A' },
+      { display: 'B1', qualifier: 'B' },
+      { display: 'B2', qualifier: 'B' },
+      { display: 'B3', qualifier: 'B' },
+    ];
+    for (let trial = 0; trial < 20; trial++) {
+      const { groups, conflicts } = splitIntoGroupsBestEffort(students, 3);
+      expect(groups).toHaveLength(3);
+      expect(conflicts).toEqual([{ qualifier: 'A', count: 2 }]);
+      const sizes = groups.map((g) => g.students.length);
+      expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('returns only display names (qualifier stripped)', () => {
+    const students: ParsedName[] = [
+      { display: 'Alice', qualifier: 'A' },
+      { display: 'Bob', qualifier: 'A' },
+      { display: 'Charlie', qualifier: 'A' },
+    ];
+    const { groups } = splitIntoGroupsBestEffort(students, 2);
+    for (const s of allStudents(groups)) {
+      expect(s).not.toMatch(/\(/);
+    }
+  });
+
+  it('returns no conflicts when the arrangement is feasible', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'B', qualifier: null },
+    ];
+    const { conflicts } = splitIntoGroupsBestEffort(students, 2);
+    expect(conflicts).toEqual([]);
+  });
+});
+
+describe('splitBySizeBestEffort', () => {
+  it('produces ceil(N/size) groups within capacity even with overflow', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+      { display: 'A4', qualifier: 'A' },
+    ];
+    const { groups, conflicts } = splitBySizeBestEffort(students, 2);
+    expect(groups).toHaveLength(2);
+    for (const g of groups) {
+      expect(g.students.length).toBeLessThanOrEqual(2);
+    }
+    expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3', 'A4']);
+    expect(conflicts).toEqual([{ qualifier: 'A', count: 2 }]);
+  });
+});
+
+describe('strict functions still throw with the same inputs', () => {
+  it('splitIntoGroups throws when best-effort would be needed', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+    ];
+    expect(() => splitIntoGroups(students, 2)).toThrow(QualifierConflictError);
+  });
+
+  it('splitBySize throws when best-effort would be needed', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+      { display: 'A4', qualifier: 'A' },
+    ];
+    expect(() => splitBySize(students, 2)).toThrow(QualifierConflictError);
   });
 });

@@ -1,25 +1,51 @@
 import type { GeneratedGroup } from '../types';
+import type { QualifierConflict } from '../utils/groups';
 import { GroupCard } from './GroupCard';
 
 interface GroupResultsProps {
   groups: GeneratedGroup[];
   title: string;
   presentMode: boolean;
+  conflicts?: QualifierConflict[];
 }
 
-export function GroupResults({ groups, title, presentMode }: GroupResultsProps) {
+function formatConflictsMessage(conflicts: QualifierConflict[]): string {
+  const total = conflicts.reduce((acc, c) => acc + c.count, 0);
+  const parts = conflicts.map(
+    (c) =>
+      `'${c.qualifier}' shares a group ${c.count} ${
+        c.count === 1 ? 'time' : 'times'
+      }`,
+  );
+  return `Generated with ${total} conflict${total === 1 ? '' : 's'}: ${parts.join(
+    ', ',
+  )}.`;
+}
+
+export function GroupResults({
+  groups,
+  title,
+  presentMode,
+  conflicts,
+}: GroupResultsProps) {
+  const showConflicts =
+    !presentMode && conflicts !== undefined && conflicts.length > 0;
+
   return (
     <div>
       {title && (
         <h2
           className={`mb-4 font-semibold ${
-            presentMode
-              ? 'text-2xl text-white'
-              : 'text-lg text-gray-800'
+            presentMode ? 'text-2xl text-white' : 'text-lg text-gray-800'
           }`}
         >
           {title}
         </h2>
+      )}
+      {showConflicts && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 no-print">
+          {formatConflictsMessage(conflicts!)}
+        </div>
       )}
       <div
         className={`grid gap-4 ${
