@@ -269,7 +269,11 @@ describe('splitIntoGroupsBestEffort', () => {
     const { groups, conflicts } = splitIntoGroupsBestEffort(students, 2);
     expect(groups).toHaveLength(2);
     expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3']);
-    expect(conflicts).toEqual([{ qualifier: 'A', count: 1 }]);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].qualifier).toBe('A');
+    expect(conflicts[0].count).toBe(1);
+    expect(conflicts[0].groups).toHaveLength(1);
+    expect(['Group 1', 'Group 2']).toContain(conflicts[0].groups[0]);
   });
 
   it('reports only qualifiers that actually overflow', () => {
@@ -286,7 +290,11 @@ describe('splitIntoGroupsBestEffort', () => {
     for (let trial = 0; trial < 20; trial++) {
       const { groups, conflicts } = splitIntoGroupsBestEffort(students, 3);
       expect(groups).toHaveLength(3);
-      expect(conflicts).toEqual([{ qualifier: 'A', count: 2 }]);
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0].qualifier).toBe('A');
+      expect(conflicts[0].count).toBe(2);
+      expect(conflicts[0].groups.length).toBeGreaterThanOrEqual(1);
+      expect(conflicts[0].groups.length).toBeLessThanOrEqual(2);
       const sizes = groups.map((g) => g.students.length);
       expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
     }
@@ -329,7 +337,11 @@ describe('splitBySizeBestEffort', () => {
       expect(g.students.length).toBeLessThanOrEqual(2);
     }
     expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3', 'A4']);
-    expect(conflicts).toEqual([{ qualifier: 'A', count: 2 }]);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].qualifier).toBe('A');
+    expect(conflicts[0].count).toBe(2);
+    expect(conflicts[0].groups.length).toBeGreaterThanOrEqual(1);
+    expect(conflicts[0].groups.length).toBeLessThanOrEqual(2);
   });
 });
 

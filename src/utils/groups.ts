@@ -104,6 +104,13 @@ function pickEligibleGroup(
 export interface QualifierConflict {
   qualifier: string;
   count: number;
+  /** 1-based labels matching generated group cards, e.g. "Group 1" */
+  groups: string[];
+}
+
+interface ConflictAccumulatorEntry {
+  count: number;
+  groupIndices: Set<number>;
 }
 
 function distributeQualifiedBuckets(
@@ -112,7 +119,7 @@ function distributeQualifiedBuckets(
   options: {
     extraEligibility?: (g: PlacementGroup) => boolean;
     bestEffort?: boolean;
-    conflicts?: Map<string, number>;
+    conflicts?: Map<string, ConflictAccumulatorEntry>;
   } = {},
 ): void {
   const { extraEligibility, bestEffort, conflicts } = options;
@@ -147,7 +154,13 @@ function distributeQualifiedBuckets(
           );
         }
         if (conflicts) {
-          conflicts.set(qualifier, (conflicts.get(qualifier) ?? 0) + 1);
+          const prev = conflicts.get(qualifier) ?? {
+            count: 0,
+            groupIndices: new Set<number>(),
+          };
+          prev.count += 1;
+          prev.groupIndices.add(idx);
+          conflicts.set(qualifier, prev);
         }
       }
       groups[idx].students.push(member.display);
@@ -180,10 +193,16 @@ function finalize(groups: PlacementGroup[]): GeneratedGroup[] {
 }
 
 function conflictsMapToArray(
-  conflicts: Map<string, number>,
+  conflicts: Map<string, ConflictAccumulatorEntry>,
 ): QualifierConflict[] {
   return Array.from(conflicts.entries())
-    .map(([qualifier, count]) => ({ qualifier, count }))
+    .map(([qualifier, { count, groupIndices }]) => ({
+      qualifier,
+      count,
+      groups: Array.from(groupIndices)
+        .sort((a, b) => a - b)
+        .map((i) => `Group ${i + 1}`),
+    }))
     .sort((a, b) => b.count - a.count || a.qualifier.localeCompare(b.qualifier));
 }
 
@@ -241,7 +260,7 @@ export function splitIntoGroupsBestEffort(
     students: [],
     qualifiers: new Set<string>(),
   }));
-  const conflicts = new Map<string, number>();
+  const conflicts = new Map<string, ConflictAccumulatorEntry>();
   distributeQualifiedBuckets(qualified, groups, {
     bestEffort: true,
     conflicts,
@@ -265,7 +284,7 @@ export function splitBySizeBestEffort(
     qualifiers: new Set<string>(),
   }));
   const hasCapacity = (g: PlacementGroup) => g.students.length < size;
-  const conflicts = new Map<string, number>();
+  const conflicts = new Map<string, ConflictAccumulatorEntry>();
   distributeQualifiedBuckets(qualified, groups, {
     extraEligibility: hasCapacity,
     bestEffort: true,
