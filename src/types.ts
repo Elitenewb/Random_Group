@@ -1,3 +1,8 @@
+export interface ParsedName {
+  display: string;
+  qualifier: string | null;
+}
+
 export interface SavedList {
   id: string;
   name: string;

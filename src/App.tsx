@@ -2,7 +2,11 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { parseNames, dedupeNames } from './utils/names';
-import { splitIntoGroups, splitBySize } from './utils/groups';
+import {
+  splitIntoGroups,
+  splitBySize,
+  analyzeQualifierFeasibility,
+} from './utils/groups';
 import { pickRandom } from './utils/shuffle';
 import {
   pickAndRemoveOne,
@@ -51,13 +55,29 @@ export default function App() {
 
   const studentCount = parsedNames.length;
 
+  const displayNames = useMemo(
+    () => parsedNames.map((p) => p.display),
+    [parsedNames],
+  );
+
+  const qualifierFeasibility = useMemo(
+    () =>
+      analyzeQualifierFeasibility(
+        parsedNames,
+        state.groupMode,
+        state.groupCount,
+      ),
+    [parsedNames, state.groupMode, state.groupCount],
+  );
+
   const canGenerate = useMemo(() => {
     if (studentCount < 2) return false;
+    if (!qualifierFeasibility.ok) return false;
     if (state.groupMode === 'byGroups') {
       return state.groupCount >= 2 && state.groupCount <= studentCount;
     }
     return state.groupCount >= 1 && state.groupCount <= studentCount;
-  }, [studentCount, state.groupCount, state.groupMode]);
+  }, [studentCount, state.groupCount, state.groupMode, qualifierFeasibility]);
 
   const validationMessage = useMemo(() => {
     if (studentCount < 2) return 'Add at least 2 students to generate groups.';
@@ -70,8 +90,13 @@ export default function App() {
       if (state.groupCount > studentCount)
         return 'Group size cannot exceed number of students.';
     }
+    if (!qualifierFeasibility.ok) {
+      return `Qualifier '${qualifierFeasibility.qualifier}' has ${qualifierFeasibility.count} members but only ${qualifierFeasibility.maxAllowed} group${
+        qualifierFeasibility.maxAllowed === 1 ? '' : 's'
+      } are available.`;
+    }
     return null;
-  }, [studentCount, state.groupCount, state.groupMode]);
+  }, [studentCount, state.groupCount, state.groupMode, qualifierFeasibility]);
 
   const handleGenerate = useCallback(() => {
     if (!canGenerate) return;
@@ -91,18 +116,18 @@ export default function App() {
   const handlePickStudent = useCallback(() => {
     if (studentCount < 1) return;
     if (pickMode === 'pure') {
-      setPickedStudent(pickRandom(parsedNames));
+      setPickedStudent(pickRandom(displayNames));
       return;
     }
     const pool =
-      eliminationRemaining.length > 0 ? eliminationRemaining : [...parsedNames];
+      eliminationRemaining.length > 0 ? eliminationRemaining : [...displayNames];
     const { picked, nextRemaining } = pickAndRemoveOne(pool);
     setEliminationRemaining(nextRemaining);
     setPickedStudent(picked);
   }, [
     studentCount,
     pickMode,
-    parsedNames,
+    displayNames,
     eliminationRemaining,
   ]);
 
@@ -122,6 +147,14 @@ export default function App() {
     eliminationRemaining,
   ]);
 
+  const serializedNames = useMemo(
+    () =>
+      parsedNames.map((p) =>
+        p.qualifier !== null ? `${p.display} (${p.qualifier})` : p.display,
+      ),
+    [parsedNames],
+  );
+
   const handleSaveList = useCallback(
     (name: string) => {
       const existing = savedLists.find(
@@ -131,7 +164,7 @@ export default function App() {
       if (existing) {
         const updated: SavedList = {
           ...existing,
-          names: parsedNames,
+          names: serializedNames,
           updatedAt: now,
         };
         setSavedLists((prev) =>
@@ -143,7 +176,7 @@ export default function App() {
         const newList: SavedList = {
           id,
           name,
-          names: parsedNames,
+          names: serializedNames,
           createdAt: now,
           updatedAt: now,
         };
@@ -151,7 +184,7 @@ export default function App() {
         setLoadedListId(id);
       }
     },
-    [parsedNames, savedLists, setSavedLists],
+    [serializedNames, savedLists, setSavedLists],
   );
 
   const handleLoadList = useCallback(
