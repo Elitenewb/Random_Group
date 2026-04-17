@@ -31,7 +31,7 @@ export function GroupSettings({
   qualifierBlocked = false,
   onGenerateBestEffort,
 }: GroupSettingsProps) {
-  const maxGroups = groupMode === 'byGroups' ? Math.min(studentCount, 10) : studentCount;
+  const maxGroups = studentCount;
   const minGroups = groupMode === 'byGroups' ? 2 : 1;
 
   return (
