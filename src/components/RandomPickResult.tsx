@@ -6,6 +6,8 @@ interface RandomPickResultProps {
   onPickAgain: () => void;
   /** Hide when primary pick action lives in the Random Pick panel below (normal layout). */
   showInlinePickAgain?: boolean;
+  /** Present mode: disable initial pick when there are no students. */
+  pickDisabled?: boolean;
 }
 
 export function RandomPickResult({
@@ -15,7 +17,14 @@ export function RandomPickResult({
   progress,
   onPickAgain,
   showInlinePickAgain = true,
+  pickDisabled = false,
 }: RandomPickResultProps) {
+  const showPickButton =
+    presentMode || (showInlinePickAgain && name !== null);
+  const pickButtonDisabled = presentMode && name === null && pickDisabled;
+  const pickButtonLabel =
+    name !== null ? 'Pick Again' : 'Pick Random Student';
+
   return (
     <div className="flex flex-col items-center gap-6">
       {title && (
@@ -66,16 +75,22 @@ export function RandomPickResult({
             }`}
           >
             {presentMode
-              ? 'Pick a student from the controls.'
+              ? 'Tap the button below to pick.'
               : 'Use Pick Random Student below.'}
           </p>
         )}
       </div>
 
-      {showInlinePickAgain && name && (
+      {presentMode && pickDisabled && name === null && (
+        <p className="text-sm text-amber-300">Add at least 1 student to pick.</p>
+      )}
+
+      {showPickButton && (
         <button
+          type="button"
           onClick={onPickAgain}
-          className={`no-print inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+          disabled={pickButtonDisabled}
+          className={`no-print inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
             presentMode
               ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -94,7 +109,7 @@ export function RandomPickResult({
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Pick Again
+          {pickButtonLabel}
         </button>
       )}
     </div>

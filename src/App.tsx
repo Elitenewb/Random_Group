@@ -386,16 +386,51 @@ export default function App() {
               </div>
             )}
 
-            {toolMode === 'picker' &&
+            {toolMode === 'picker' && presentMode && (
+              <div className="mx-auto w-full max-w-xl">
+                <RandomPickResult
+                  name={pickedStudent}
+                  title={state.title}
+                  presentMode
+                  progress={pickProgress}
+                  onPickAgain={handlePickStudent}
+                  pickDisabled={studentCount < 1}
+                />
+              </div>
+            )}
+
+            {toolMode === 'groups' &&
               presentMode &&
-              pickedStudent !== null && (
-              <RandomPickResult
-                name={pickedStudent}
-                title={state.title}
-                presentMode
-                progress={pickProgress}
-                onPickAgain={handlePickStudent}
-              />
+              groups.length === 0 && (
+              <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4">
+                {state.title ? (
+                  <h2 className="text-center text-2xl font-semibold text-white">
+                    {state.title}
+                  </h2>
+                ) : null}
+                {validationMessage ? (
+                  <p className="text-center text-sm text-amber-300">
+                    {validationMessage}
+                  </p>
+                ) : null}
+                {qualifierBlocked && canGenerateBestEffort ? (
+                  <button
+                    type="button"
+                    onClick={handleGenerateBestEffort}
+                    className="no-print text-center text-sm font-medium text-blue-400 underline underline-offset-2 hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                  >
+                    Generate anyway (best effort)
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={!canGenerate}
+                  className="no-print w-full max-w-md rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+                >
+                  Generate Groups
+                </button>
+              </div>
             )}
 
             {toolMode === 'groups' && !presentMode && (
