@@ -1,5 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="#2563EB"/>
-  <path d="M10 11a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0Zm7 0a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0ZM8 19.5c0-1.38 1.12-2.5 2.5-2.5h3c1.38 0 2.5 1.12 2.5 2.5V21H8v-1.5Zm8 0c0-1.38 1.12-2.5 2.5-2.5h3c1.38 0 2.5 1.12 2.5 2.5V21h-8v-1.5Z" fill="white"/>
-  <line x1="16" y1="8" x2="16" y2="24" stroke="white" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020617"/>
+      <stop offset="0.45" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="128" y1="128" x2="384" y2="384" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="168" stroke="url(#ring)" stroke-width="10" opacity="0.95" filter="url(#glow)"/>
+  <g fill="#f8fafc">
+    <!-- Three figures in a triangle = small group -->
+    <ellipse cx="256" cy="198" rx="34" ry="38"/>
+    <path d="M214 292c0-28 22-50 50-50h-16c-28 0-50 22-50 50v36h-44v-36c0-38 31-69 69-69h42c38 0 69 31 69 69v36h-44v-36c0-28-22-50-50-50h-16z"/>
+    <ellipse cx="178" cy="248" rx="26" ry="30"/>
+    <path d="M132 318c0-22 17-39 39-39h10c-22 0-39 17-39 39v52h-36v-52c0-35 28-63 63-63h8c35 0 63 28 63 63v52h-36v-52c0-22-17-39-39-39h-10z"/>
+    <ellipse cx="334" cy="248" rx="26" ry="30"/>
+    <path d="M290 318c0-22 17-39 39-39h10c-22 0-39 17-39 39v52h-36v-52c0-35 28-63 63-63h8c35 0 63 28 63 63v52h-36v-52c0-22-17-39-39-39h-10z"/>
+  </g>
+  <!-- Shuffle orbit dots -->
+  <circle cx="388" cy="168" r="10" fill="#22d3ee"/>
+  <circle cx="124" cy="344" r="8" fill="#a78bfa"/>
+  <circle cx="400" cy="320" r="7" fill="#38bdf8" opacity="0.85"/>
 </svg>

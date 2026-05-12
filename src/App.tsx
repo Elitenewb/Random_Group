@@ -16,6 +16,7 @@ import {
   eliminationProgress,
 } from './utils/pickerElimination';
 import type { GeneratedGroup, SavedList, ToolMode, PickMode } from './types';
+import { isTouchPrimaryDevice } from './utils/device';
 import { Header } from './components/Header';
 import { StudentListInput } from './components/StudentListInput';
 import { GroupSettings } from './components/GroupSettings';
@@ -29,15 +30,21 @@ export default function App() {
   const { state, updateState } = useAppState();
   const [groups, setGroups] = useState<GeneratedGroup[]>([]);
   const [conflicts, setConflicts] = useState<QualifierConflict[]>([]);
-  const [presentMode, setPresentMode] = useState(false);
+  const [presentMode, setPresentMode] = useState(() =>
+    isTouchPrimaryDevice(),
+  );
   const [savedLists, setSavedLists] = useLocalStorage<SavedList[]>(
     'rgg-saved-lists',
     [],
   );
   const [loadedListId, setLoadedListId] = useState<string | null>(null);
-  const [toolMode, setToolMode] = useState<ToolMode>('groups');
+  const [toolMode, setToolMode] = useState<ToolMode>(() =>
+    isTouchPrimaryDevice() ? 'picker' : 'groups',
+  );
   const [pickedStudent, setPickedStudent] = useState<string | null>(null);
-  const [pickMode, setPickMode] = useState<PickMode>('pure');
+  const [pickMode, setPickMode] = useState<PickMode>(() =>
+    isTouchPrimaryDevice() ? 'eliminate' : 'pure',
+  );
   const [eliminationRemaining, setEliminationRemaining] = useState<string[]>(
     [],
   );
