@@ -1,4 +1,4 @@
-import type { GroupMode } from '../types';
+import type { GroupMode, QualifierMode } from '../types';
 
 interface GroupSettingsProps {
   title: string;
@@ -7,6 +7,8 @@ interface GroupSettingsProps {
   onChangeGroupMode: (mode: GroupMode) => void;
   groupCount: number;
   onChangeGroupCount: (count: number) => void;
+  qualifierMode: QualifierMode;
+  onChangeQualifierMode: (mode: QualifierMode) => void;
   studentCount: number;
   canGenerate: boolean;
   validationMessage: string | null;
@@ -23,6 +25,8 @@ export function GroupSettings({
   onChangeGroupMode,
   groupCount,
   onChangeGroupCount,
+  qualifierMode,
+  onChangeQualifierMode,
   studentCount,
   canGenerate,
   validationMessage,
@@ -83,6 +87,41 @@ export function GroupSettings({
             Students per group
           </button>
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-600 mb-2">
+          Qualifiers
+        </label>
+        <div className="flex rounded-lg border border-gray-300 p-0.5 bg-gray-50">
+          <button
+            type="button"
+            onClick={() => onChangeQualifierMode('separate')}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              qualifierMode === 'separate'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Keep apart
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangeQualifierMode('match')}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              qualifierMode === 'match'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Match together
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          {qualifierMode === 'separate'
+            ? 'Students with the same parenthetical tag are kept in different groups when possible.'
+            : 'Students with the same parenthetical tag are placed in the same group when possible.'}
+        </p>
       </div>
 
       <div>

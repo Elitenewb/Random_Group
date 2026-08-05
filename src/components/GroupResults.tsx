@@ -11,16 +11,28 @@ interface GroupResultsProps {
 
 function formatConflictsMessage(conflicts: QualifierConflict[]): string {
   const total = conflicts.reduce((acc, c) => acc + c.count, 0);
+  const kind = conflicts[0]?.kind ?? 'overlap';
   const parts = conflicts.map((c) => {
-    const clause = `'${c.qualifier}' shares a group ${c.count} ${
-      c.count === 1 ? 'time' : 'times'
-    }`;
+    const clause =
+      c.kind === 'split'
+        ? `'${c.qualifier}' split ${c.count} ${
+            c.count === 1 ? 'member' : 'members'
+          }`
+        : `'${c.qualifier}' shares a group ${c.count} ${
+            c.count === 1 ? 'time' : 'times'
+          }`;
     if (c.groups.length === 0) return clause;
     return `${clause} (${c.groups.join(', ')})`;
   });
-  return `Generated with ${total} conflict${total === 1 ? '' : 's'}: ${parts.join(
-    ', ',
-  )}.`;
+  const noun =
+    kind === 'split'
+      ? total === 1
+        ? 'split'
+        : 'splits'
+      : total === 1
+        ? 'conflict'
+        : 'conflicts';
+  return `Generated with ${total} ${noun}: ${parts.join(', ')}.`;
 }
 
 export function GroupResults({

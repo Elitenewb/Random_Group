@@ -18,6 +18,9 @@ export interface GeneratedGroup {
 
 export type GroupMode = 'byGroups' | 'bySize';
 
+/** How parenthetical qualifiers affect grouping. */
+export type QualifierMode = 'separate' | 'match';
+
 export type ToolMode = 'groups' | 'picker';
 
 export type PickMode = 'pure' | 'eliminate';
@@ -27,5 +30,6 @@ export interface AppState {
   rawText: string;
   groupCount: number;
   groupMode: GroupMode;
+  qualifierMode: QualifierMode;
   dedupeEnabled: boolean;
 }

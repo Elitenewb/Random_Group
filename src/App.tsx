@@ -78,8 +78,9 @@ export default function App() {
         parsedNames,
         state.groupMode,
         state.groupCount,
+        state.qualifierMode,
       ),
-    [parsedNames, state.groupMode, state.groupCount],
+    [parsedNames, state.groupMode, state.groupCount, state.qualifierMode],
   );
 
   const canGenerate = useMemo(() => {
@@ -103,6 +104,11 @@ export default function App() {
         return 'Group size cannot exceed number of students.';
     }
     if (!qualifierFeasibility.ok) {
+      if (qualifierFeasibility.mode === 'match') {
+        return `Qualifier '${qualifierFeasibility.qualifier}' has ${qualifierFeasibility.count} members but groups only hold ${qualifierFeasibility.maxAllowed} student${
+          qualifierFeasibility.maxAllowed === 1 ? '' : 's'
+        }.`;
+      }
       return `Qualifier '${qualifierFeasibility.qualifier}' has ${qualifierFeasibility.count} members but only ${qualifierFeasibility.maxAllowed} group${
         qualifierFeasibility.maxAllowed === 1 ? '' : 's'
       } are available.`;
@@ -125,18 +131,32 @@ export default function App() {
     if (!canGenerate) return;
     const result =
       state.groupMode === 'byGroups'
-        ? splitIntoGroups(parsedNames, state.groupCount)
-        : splitBySize(parsedNames, state.groupCount);
+        ? splitIntoGroups(parsedNames, state.groupCount, state.qualifierMode)
+        : splitBySize(parsedNames, state.groupCount, state.qualifierMode);
     setGroups(result);
     setConflicts([]);
-  }, [canGenerate, parsedNames, state.groupCount, state.groupMode]);
+  }, [
+    canGenerate,
+    parsedNames,
+    state.groupCount,
+    state.groupMode,
+    state.qualifierMode,
+  ]);
 
   const handleGenerateBestEffort = useCallback(() => {
     if (!canGenerateBestEffort) return;
     const result =
       state.groupMode === 'byGroups'
-        ? splitIntoGroupsBestEffort(parsedNames, state.groupCount)
-        : splitBySizeBestEffort(parsedNames, state.groupCount);
+        ? splitIntoGroupsBestEffort(
+            parsedNames,
+            state.groupCount,
+            state.qualifierMode,
+          )
+        : splitBySizeBestEffort(
+            parsedNames,
+            state.groupCount,
+            state.qualifierMode,
+          );
     setGroups(result.groups);
     setConflicts(result.conflicts);
   }, [
@@ -144,6 +164,7 @@ export default function App() {
     parsedNames,
     state.groupCount,
     state.groupMode,
+    state.qualifierMode,
   ]);
 
   const handlePickModeChange = useCallback((mode: PickMode) => {
@@ -462,6 +483,10 @@ export default function App() {
                   onChangeGroupMode={(m) => updateState({ groupMode: m })}
                   groupCount={state.groupCount}
                   onChangeGroupCount={(n) => updateState({ groupCount: n })}
+                  qualifierMode={state.qualifierMode}
+                  onChangeQualifierMode={(m) =>
+                    updateState({ qualifierMode: m })
+                  }
                   studentCount={studentCount}
                   canGenerate={canGenerate}
                   validationMessage={validationMessage}

@@ -23,12 +23,25 @@ const DEFAULT_STATE: AppState = {
   rawText: DEMO_NAMES,
   groupCount: 4,
   groupMode: 'byGroups',
+  qualifierMode: 'separate',
   dedupeEnabled: false,
 };
 
+function normalizeAppState(saved: AppState | null): AppState {
+  if (!saved) return DEFAULT_STATE;
+  return {
+    ...DEFAULT_STATE,
+    ...saved,
+    qualifierMode:
+      saved.qualifierMode === 'match' || saved.qualifierMode === 'separate'
+        ? saved.qualifierMode
+        : 'separate',
+  };
+}
+
 export function useAppState() {
   const [state, setState] = useState<AppState>(() => {
-    return getAppState() ?? DEFAULT_STATE;
+    return normalizeAppState(getAppState());
   });
 
   useEffect(() => {

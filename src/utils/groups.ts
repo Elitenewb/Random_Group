@@ -1,27 +1,49 @@
-import type { GeneratedGroup, GroupMode, ParsedName } from '../types';
+import type {
+  GeneratedGroup,
+  GroupMode,
+  ParsedName,
+  QualifierMode,
+} from '../types';
 import { fisherYatesShuffle } from './shuffle';
 
 export class QualifierConflictError extends Error {
   qualifier: string;
   count: number;
   maxAllowed: number;
+  mode: QualifierMode;
 
-  constructor(qualifier: string, count: number, maxAllowed: number) {
-    super(
-      `Qualifier '${qualifier}' has ${count} members but only ${maxAllowed} group${
-        maxAllowed === 1 ? '' : 's'
-      } are available.`,
-    );
+  constructor(
+    qualifier: string,
+    count: number,
+    maxAllowed: number,
+    mode: QualifierMode = 'separate',
+  ) {
+    const message =
+      mode === 'match'
+        ? `Qualifier '${qualifier}' has ${count} members but groups only hold ${maxAllowed} student${
+            maxAllowed === 1 ? '' : 's'
+          }.`
+        : `Qualifier '${qualifier}' has ${count} members but only ${maxAllowed} group${
+            maxAllowed === 1 ? '' : 's'
+          } are available.`;
+    super(message);
     this.name = 'QualifierConflictError';
     this.qualifier = qualifier;
     this.count = count;
     this.maxAllowed = maxAllowed;
+    this.mode = mode;
   }
 }
 
 export type QualifierFeasibility =
   | { ok: true }
-  | { ok: false; qualifier: string; count: number; maxAllowed: number };
+  | {
+      ok: false;
+      qualifier: string;
+      count: number;
+      maxAllowed: number;
+      mode: QualifierMode;
+    };
 
 function bucketByQualifier(students: ParsedName[]): {
   qualified: Map<string, ParsedName[]>;
@@ -58,18 +80,36 @@ export function analyzeQualifierFeasibility(
   students: ParsedName[],
   mode: GroupMode,
   groupCount: number,
+  qualifierMode: QualifierMode = 'separate',
 ): QualifierFeasibility {
   if (students.length === 0 || groupCount <= 0) return { ok: true };
   const { qualified } = bucketByQualifier(students);
+  const largest = largestBucketSize(qualified);
+  if (!largest) return { ok: true };
+
+  if (qualifierMode === 'match') {
+    // Match only hits a hard limit for bySize: bucket must fit in one group.
+    if (mode === 'bySize' && largest.count > groupCount) {
+      return {
+        ok: false,
+        qualifier: largest.qualifier,
+        count: largest.count,
+        maxAllowed: groupCount,
+        mode: 'match',
+      };
+    }
+    return { ok: true };
+  }
+
   const maxAllowed =
     mode === 'byGroups' ? groupCount : Math.ceil(students.length / groupCount);
-  const largest = largestBucketSize(qualified);
-  if (largest && largest.count > maxAllowed) {
+  if (largest.count > maxAllowed) {
     return {
       ok: false,
       qualifier: largest.qualifier,
       count: largest.count,
       maxAllowed,
+      mode: 'separate',
     };
   }
   return { ok: true };
@@ -101,11 +141,37 @@ function pickEligibleGroup(
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
+/** Prefer the eligible group with the most free capacity (ties broken randomly). */
+function pickMostCapacityGroup(
+  groups: PlacementGroup[],
+  capacityOf: (g: PlacementGroup) => number,
+  isEligible: (g: PlacementGroup) => boolean,
+): number {
+  let bestCap = -1;
+  const candidates: number[] = [];
+  for (let i = 0; i < groups.length; i++) {
+    if (!isEligible(groups[i])) continue;
+    const cap = capacityOf(groups[i]);
+    if (cap <= 0) continue;
+    if (cap > bestCap) {
+      bestCap = cap;
+      candidates.length = 0;
+      candidates.push(i);
+    } else if (cap === bestCap) {
+      candidates.push(i);
+    }
+  }
+  if (candidates.length === 0) return -1;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 export interface QualifierConflict {
   qualifier: string;
   count: number;
   /** 1-based labels matching generated group cards, e.g. "Group 1" */
   groups: string[];
+  /** separate: forced overlap; match: forced split across groups */
+  kind: 'overlap' | 'split';
 }
 
 interface ConflictAccumulatorEntry {
@@ -113,7 +179,7 @@ interface ConflictAccumulatorEntry {
   groupIndices: Set<number>;
 }
 
-function distributeQualifiedBuckets(
+function distributeQualifiedBucketsSeparate(
   qualified: Map<string, ParsedName[]>,
   groups: PlacementGroup[],
   options: {
@@ -140,6 +206,7 @@ function distributeQualifiedBuckets(
             qualifier,
             members.length,
             groups.length,
+            'separate',
           );
         }
         idx = pickEligibleGroup(groups, (g) => {
@@ -151,6 +218,7 @@ function distributeQualifiedBuckets(
             qualifier,
             members.length,
             groups.length,
+            'separate',
           );
         }
         if (conflicts) {
@@ -165,6 +233,103 @@ function distributeQualifiedBuckets(
       }
       groups[idx].students.push(member.display);
       groups[idx].qualifiers.add(qualifier);
+    }
+  }
+}
+
+function distributeQualifiedBucketsMatch(
+  qualified: Map<string, ParsedName[]>,
+  groups: PlacementGroup[],
+  options: {
+    maxGroupSize?: number;
+    bestEffort?: boolean;
+    conflicts?: Map<string, ConflictAccumulatorEntry>;
+  } = {},
+): void {
+  const { maxGroupSize, bestEffort, conflicts } = options;
+  const capacityOf = (g: PlacementGroup) =>
+    maxGroupSize !== undefined
+      ? maxGroupSize - g.students.length
+      : Number.POSITIVE_INFINITY;
+
+  const buckets = Array.from(qualified.entries()).sort(
+    (a, b) => b[1].length - a[1].length,
+  );
+
+  for (const [qualifier, members] of buckets) {
+    if (
+      maxGroupSize !== undefined &&
+      members.length > maxGroupSize &&
+      !bestEffort
+    ) {
+      throw new QualifierConflictError(
+        qualifier,
+        members.length,
+        maxGroupSize,
+        'match',
+      );
+    }
+
+    const shuffled = fisherYatesShuffle(members);
+    let remaining = shuffled;
+    const placedGroupIndices = new Set<number>();
+
+    while (remaining.length > 0) {
+      // Prefer continuing a group that already has this qualifier.
+      let idx = pickEligibleGroup(groups, (g) => {
+        return g.qualifiers.has(qualifier) && capacityOf(g) > 0;
+      });
+
+      // Otherwise prefer a group that can take the entire remaining bucket.
+      if (idx === -1) {
+        idx = pickEligibleGroup(groups, (g) => {
+          return capacityOf(g) >= remaining.length;
+        });
+      }
+
+      // Otherwise take the group with the most remaining capacity (forced split).
+      if (idx === -1) {
+        idx = pickMostCapacityGroup(groups, capacityOf, () => true);
+      }
+
+      if (idx === -1) {
+        throw new QualifierConflictError(
+          qualifier,
+          members.length,
+          maxGroupSize ?? groups.length,
+          'match',
+        );
+      }
+
+      const fits = Math.min(remaining.length, capacityOf(groups[idx]));
+      if (fits <= 0) {
+        throw new QualifierConflictError(
+          qualifier,
+          members.length,
+          maxGroupSize ?? groups.length,
+          'match',
+        );
+      }
+
+      const isSplit =
+        placedGroupIndices.size > 0 && !placedGroupIndices.has(idx);
+      if (isSplit && conflicts) {
+        const prev = conflicts.get(qualifier) ?? {
+          count: 0,
+          groupIndices: new Set<number>(),
+        };
+        prev.count += fits;
+        prev.groupIndices.add(idx);
+        for (const gi of placedGroupIndices) prev.groupIndices.add(gi);
+        conflicts.set(qualifier, prev);
+      }
+
+      for (let i = 0; i < fits; i++) {
+        groups[idx].students.push(remaining[i].display);
+      }
+      groups[idx].qualifiers.add(qualifier);
+      placedGroupIndices.add(idx);
+      remaining = remaining.slice(fits);
     }
   }
 }
@@ -194,11 +359,13 @@ function finalize(groups: PlacementGroup[]): GeneratedGroup[] {
 
 function conflictsMapToArray(
   conflicts: Map<string, ConflictAccumulatorEntry>,
+  kind: 'overlap' | 'split',
 ): QualifierConflict[] {
   return Array.from(conflicts.entries())
     .map(([qualifier, { count, groupIndices }]) => ({
       qualifier,
       count,
+      kind,
       groups: Array.from(groupIndices)
         .sort((a, b) => a - b)
         .map((i) => `Group ${i + 1}`),
@@ -206,20 +373,36 @@ function conflictsMapToArray(
     .sort((a, b) => b.count - a.count || a.qualifier.localeCompare(b.qualifier));
 }
 
-export function splitIntoGroups(
-  students: ParsedName[],
-  count: number,
-): GeneratedGroup[] {
-  const { qualified, unqualified } = bucketByQualifier(students);
-  const largest = largestBucketSize(qualified);
-  if (largest && largest.count > count) {
-    throw new QualifierConflictError(largest.qualifier, largest.count, count);
-  }
-  const groups: PlacementGroup[] = Array.from({ length: count }, () => ({
+function emptyGroups(count: number): PlacementGroup[] {
+  return Array.from({ length: count }, () => ({
     students: [],
     qualifiers: new Set<string>(),
   }));
-  distributeQualifiedBuckets(qualified, groups);
+}
+
+export function splitIntoGroups(
+  students: ParsedName[],
+  count: number,
+  qualifierMode: QualifierMode = 'separate',
+): GeneratedGroup[] {
+  const { qualified, unqualified } = bucketByQualifier(students);
+  if (qualifierMode === 'separate') {
+    const largest = largestBucketSize(qualified);
+    if (largest && largest.count > count) {
+      throw new QualifierConflictError(
+        largest.qualifier,
+        largest.count,
+        count,
+        'separate',
+      );
+    }
+  }
+  const groups = emptyGroups(count);
+  if (qualifierMode === 'match') {
+    distributeQualifiedBucketsMatch(qualified, groups);
+  } else {
+    distributeQualifiedBucketsSeparate(qualified, groups);
+  }
   distributeUnqualified(unqualified, groups);
   return finalize(groups);
 }
@@ -227,26 +410,41 @@ export function splitIntoGroups(
 export function splitBySize(
   students: ParsedName[],
   size: number,
+  qualifierMode: QualifierMode = 'separate',
 ): GeneratedGroup[] {
   if (students.length === 0) return [];
   const numGroups = Math.ceil(students.length / size);
   const { qualified, unqualified } = bucketByQualifier(students);
-  const largest = largestBucketSize(qualified);
-  if (largest && largest.count > numGroups) {
-    throw new QualifierConflictError(
-      largest.qualifier,
-      largest.count,
-      numGroups,
-    );
+  if (qualifierMode === 'separate') {
+    const largest = largestBucketSize(qualified);
+    if (largest && largest.count > numGroups) {
+      throw new QualifierConflictError(
+        largest.qualifier,
+        largest.count,
+        numGroups,
+        'separate',
+      );
+    }
+  } else {
+    const largest = largestBucketSize(qualified);
+    if (largest && largest.count > size) {
+      throw new QualifierConflictError(
+        largest.qualifier,
+        largest.count,
+        size,
+        'match',
+      );
+    }
   }
-  const groups: PlacementGroup[] = Array.from({ length: numGroups }, () => ({
-    students: [],
-    qualifiers: new Set<string>(),
-  }));
+  const groups = emptyGroups(numGroups);
   const hasCapacity = (g: PlacementGroup) => g.students.length < size;
-  distributeQualifiedBuckets(qualified, groups, {
-    extraEligibility: hasCapacity,
-  });
+  if (qualifierMode === 'match') {
+    distributeQualifiedBucketsMatch(qualified, groups, { maxGroupSize: size });
+  } else {
+    distributeQualifiedBucketsSeparate(qualified, groups, {
+      extraEligibility: hasCapacity,
+    });
+  }
   distributeUnqualified(unqualified, groups, hasCapacity);
   return finalize(groups);
 }
@@ -254,45 +452,60 @@ export function splitBySize(
 export function splitIntoGroupsBestEffort(
   students: ParsedName[],
   count: number,
+  qualifierMode: QualifierMode = 'separate',
 ): { groups: GeneratedGroup[]; conflicts: QualifierConflict[] } {
   const { qualified, unqualified } = bucketByQualifier(students);
-  const groups: PlacementGroup[] = Array.from({ length: count }, () => ({
-    students: [],
-    qualifiers: new Set<string>(),
-  }));
+  const groups = emptyGroups(count);
   const conflicts = new Map<string, ConflictAccumulatorEntry>();
-  distributeQualifiedBuckets(qualified, groups, {
-    bestEffort: true,
-    conflicts,
-  });
+  if (qualifierMode === 'match') {
+    // byGroups match has no hard capacity limit, so no splits are forced.
+    distributeQualifiedBucketsMatch(qualified, groups);
+  } else {
+    distributeQualifiedBucketsSeparate(qualified, groups, {
+      bestEffort: true,
+      conflicts,
+    });
+  }
   distributeUnqualified(unqualified, groups);
   return {
     groups: finalize(groups),
-    conflicts: conflictsMapToArray(conflicts),
+    conflicts: conflictsMapToArray(
+      conflicts,
+      qualifierMode === 'match' ? 'split' : 'overlap',
+    ),
   };
 }
 
 export function splitBySizeBestEffort(
   students: ParsedName[],
   size: number,
+  qualifierMode: QualifierMode = 'separate',
 ): { groups: GeneratedGroup[]; conflicts: QualifierConflict[] } {
   if (students.length === 0) return { groups: [], conflicts: [] };
   const numGroups = Math.ceil(students.length / size);
   const { qualified, unqualified } = bucketByQualifier(students);
-  const groups: PlacementGroup[] = Array.from({ length: numGroups }, () => ({
-    students: [],
-    qualifiers: new Set<string>(),
-  }));
+  const groups = emptyGroups(numGroups);
   const hasCapacity = (g: PlacementGroup) => g.students.length < size;
   const conflicts = new Map<string, ConflictAccumulatorEntry>();
-  distributeQualifiedBuckets(qualified, groups, {
-    extraEligibility: hasCapacity,
-    bestEffort: true,
-    conflicts,
-  });
+  if (qualifierMode === 'match') {
+    distributeQualifiedBucketsMatch(qualified, groups, {
+      maxGroupSize: size,
+      bestEffort: true,
+      conflicts,
+    });
+  } else {
+    distributeQualifiedBucketsSeparate(qualified, groups, {
+      extraEligibility: hasCapacity,
+      bestEffort: true,
+      conflicts,
+    });
+  }
   distributeUnqualified(unqualified, groups, hasCapacity);
   return {
     groups: finalize(groups),
-    conflicts: conflictsMapToArray(conflicts),
+    conflicts: conflictsMapToArray(
+      conflicts,
+      qualifierMode === 'match' ? 'split' : 'overlap',
+    ),
   };
 }

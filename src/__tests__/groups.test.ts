@@ -240,6 +240,7 @@ describe('analyzeQualifierFeasibility', () => {
       qualifier: 'A',
       count: 3,
       maxAllowed: 2,
+      mode: 'separate',
     });
   });
 
@@ -255,7 +256,37 @@ describe('analyzeQualifierFeasibility', () => {
       qualifier: 'A',
       count: 3,
       maxAllowed: 2,
+      mode: 'separate',
     });
+  });
+
+  it('match mode allows large buckets for byGroups', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+      { display: 'A4', qualifier: 'A' },
+    ];
+    expect(
+      analyzeQualifierFeasibility(students, 'byGroups', 2, 'match'),
+    ).toEqual({ ok: true });
+  });
+
+  it('match mode flags bySize when a bucket exceeds group size', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+    ];
+    expect(analyzeQualifierFeasibility(students, 'bySize', 2, 'match')).toEqual(
+      {
+        ok: false,
+        qualifier: 'A',
+        count: 3,
+        maxAllowed: 2,
+        mode: 'match',
+      },
+    );
   });
 });
 
@@ -363,5 +394,97 @@ describe('strict functions still throw with the same inputs', () => {
       { display: 'A4', qualifier: 'A' },
     ];
     expect(() => splitBySize(students, 2)).toThrow(QualifierConflictError);
+  });
+});
+
+describe('qualifier match mode', () => {
+  function groupForStudent(
+    groups: { students: string[] }[],
+    name: string,
+  ): number {
+    return groups.findIndex((g) => g.students.includes(name));
+  }
+
+  it('places same-qualifier members in the same group for byGroups', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+      { display: 'B1', qualifier: 'B' },
+      { display: 'B2', qualifier: 'B' },
+      { display: 'C', qualifier: null },
+      { display: 'D', qualifier: null },
+      { display: 'E', qualifier: null },
+    ];
+    for (let trial = 0; trial < 50; trial++) {
+      const groups = splitIntoGroups(students, 3, 'match');
+      expect(groupForStudent(groups, 'A1')).toBe(groupForStudent(groups, 'A2'));
+      expect(groupForStudent(groups, 'A1')).toBe(groupForStudent(groups, 'A3'));
+      expect(groupForStudent(groups, 'B1')).toBe(groupForStudent(groups, 'B2'));
+      expect(allStudents(groups).sort()).toEqual(
+        students.map((s) => s.display).sort(),
+      );
+    }
+  });
+
+  it('places same-qualifier members in the same group for bySize when they fit', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'B1', qualifier: 'B' },
+      { display: 'B2', qualifier: 'B' },
+      { display: 'C', qualifier: null },
+      { display: 'D', qualifier: null },
+    ];
+    for (let trial = 0; trial < 50; trial++) {
+      const groups = splitBySize(students, 3, 'match');
+      expect(groupForStudent(groups, 'A1')).toBe(groupForStudent(groups, 'A2'));
+      expect(groupForStudent(groups, 'B1')).toBe(groupForStudent(groups, 'B2'));
+      for (const g of groups) {
+        expect(g.students.length).toBeLessThanOrEqual(3);
+      }
+    }
+  });
+
+  it('throws when a match bucket exceeds group size', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+      { display: 'B', qualifier: null },
+    ];
+    expect(() => splitBySize(students, 2, 'match')).toThrow(
+      QualifierConflictError,
+    );
+  });
+
+  it('best-effort match splits oversized buckets and reports splits', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+      { display: 'A4', qualifier: 'A' },
+    ];
+    const { groups, conflicts } = splitBySizeBestEffort(students, 2, 'match');
+    expect(groups).toHaveLength(2);
+    for (const g of groups) {
+      expect(g.students.length).toBeLessThanOrEqual(2);
+    }
+    expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3', 'A4']);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].qualifier).toBe('A');
+    expect(conflicts[0].kind).toBe('split');
+    expect(conflicts[0].count).toBe(2);
+    expect(conflicts[0].groups).toHaveLength(2);
+  });
+
+  it('marks separate best-effort conflicts as overlap kind', () => {
+    const students: ParsedName[] = [
+      { display: 'A1', qualifier: 'A' },
+      { display: 'A2', qualifier: 'A' },
+      { display: 'A3', qualifier: 'A' },
+    ];
+    const { conflicts } = splitIntoGroupsBestEffort(students, 2, 'separate');
+    expect(conflicts[0].kind).toBe('overlap');
   });
 });
