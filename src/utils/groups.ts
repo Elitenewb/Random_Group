@@ -88,16 +88,8 @@ export function analyzeQualifierFeasibility(
   if (!largest) return { ok: true };
 
   if (qualifierMode === 'match') {
-    // Match only hits a hard limit for bySize: bucket must fit in one group.
-    if (mode === 'bySize' && largest.count > groupCount) {
-      return {
-        ok: false,
-        qualifier: largest.qualifier,
-        count: largest.count,
-        maxAllowed: groupCount,
-        mode: 'match',
-      };
-    }
+    // Matching is a preference, so splitting a tag across balanced groups is
+    // always allowed.
     return { ok: true };
   }
 
@@ -118,6 +110,7 @@ export function analyzeQualifierFeasibility(
 interface PlacementGroup {
   students: string[];
   qualifiers: Set<string>;
+  targetSize?: number;
 }
 
 function pickEligibleGroup(
@@ -240,54 +233,36 @@ function distributeQualifiedBucketsSeparate(
 function distributeQualifiedBucketsMatch(
   qualified: Map<string, ParsedName[]>,
   groups: PlacementGroup[],
-  options: {
-    maxGroupSize?: number;
-    bestEffort?: boolean;
-    conflicts?: Map<string, ConflictAccumulatorEntry>;
-  } = {},
 ): void {
-  const { maxGroupSize, bestEffort, conflicts } = options;
   const capacityOf = (g: PlacementGroup) =>
-    maxGroupSize !== undefined
-      ? maxGroupSize - g.students.length
-      : Number.POSITIVE_INFINITY;
+    (g.targetSize ?? Number.POSITIVE_INFINITY) - g.students.length;
 
   const buckets = Array.from(qualified.entries()).sort(
     (a, b) => b[1].length - a[1].length,
   );
 
   for (const [qualifier, members] of buckets) {
-    if (
-      maxGroupSize !== undefined &&
-      members.length > maxGroupSize &&
-      !bestEffort
-    ) {
-      throw new QualifierConflictError(
-        qualifier,
-        members.length,
-        maxGroupSize,
-        'match',
-      );
-    }
-
     const shuffled = fisherYatesShuffle(members);
     let remaining = shuffled;
-    const placedGroupIndices = new Set<number>();
 
     while (remaining.length > 0) {
       // Prefer continuing a group that already has this qualifier.
-      let idx = pickEligibleGroup(groups, (g) => {
-        return g.qualifiers.has(qualifier) && capacityOf(g) > 0;
-      });
+      let idx = pickMostCapacityGroup(
+        groups,
+        capacityOf,
+        (g) => g.qualifiers.has(qualifier),
+      );
 
-      // Otherwise prefer a group that can take the entire remaining bucket.
+      // An exact fit avoids opening a partially filled group that a later tag
+      // could have occupied as a complete same-tag pair or cluster.
       if (idx === -1) {
         idx = pickEligibleGroup(groups, (g) => {
-          return capacityOf(g) >= remaining.length;
+          return capacityOf(g) === remaining.length;
         });
       }
 
-      // Otherwise take the group with the most remaining capacity (forced split).
+      // Otherwise use the largest available slot, minimizing the number of
+      // groups this tag spans while preserving each group's balanced target.
       if (idx === -1) {
         idx = pickMostCapacityGroup(groups, capacityOf, () => true);
       }
@@ -296,7 +271,7 @@ function distributeQualifiedBucketsMatch(
         throw new QualifierConflictError(
           qualifier,
           members.length,
-          maxGroupSize ?? groups.length,
+          Math.max(...groups.map((g) => g.targetSize ?? 0)),
           'match',
         );
       }
@@ -306,29 +281,15 @@ function distributeQualifiedBucketsMatch(
         throw new QualifierConflictError(
           qualifier,
           members.length,
-          maxGroupSize ?? groups.length,
+          Math.max(...groups.map((g) => g.targetSize ?? 0)),
           'match',
         );
-      }
-
-      const isSplit =
-        placedGroupIndices.size > 0 && !placedGroupIndices.has(idx);
-      if (isSplit && conflicts) {
-        const prev = conflicts.get(qualifier) ?? {
-          count: 0,
-          groupIndices: new Set<number>(),
-        };
-        prev.count += fits;
-        prev.groupIndices.add(idx);
-        for (const gi of placedGroupIndices) prev.groupIndices.add(gi);
-        conflicts.set(qualifier, prev);
       }
 
       for (let i = 0; i < fits; i++) {
         groups[idx].students.push(remaining[i].display);
       }
       groups[idx].qualifiers.add(qualifier);
-      placedGroupIndices.add(idx);
       remaining = remaining.slice(fits);
     }
   }
@@ -373,10 +334,25 @@ function conflictsMapToArray(
     .sort((a, b) => b.count - a.count || a.qualifier.localeCompare(b.qualifier));
 }
 
-function emptyGroups(count: number): PlacementGroup[] {
-  return Array.from({ length: count }, () => ({
+function balancedTargetSizes(total: number, count: number): number[] {
+  const minimum = Math.floor(total / count);
+  const largerGroups = total % count;
+  return fisherYatesShuffle(
+    Array.from(
+      { length: count },
+      (_, index) => minimum + (index < largerGroups ? 1 : 0),
+    ),
+  );
+}
+
+function emptyGroups(
+  count: number,
+  targetSizes?: number[],
+): PlacementGroup[] {
+  return Array.from({ length: count }, (_, index) => ({
     students: [],
     qualifiers: new Set<string>(),
+    targetSize: targetSizes?.[index],
   }));
 }
 
@@ -397,7 +373,12 @@ export function splitIntoGroups(
       );
     }
   }
-  const groups = emptyGroups(count);
+  const groups = emptyGroups(
+    count,
+    qualifierMode === 'match'
+      ? balancedTargetSizes(students.length, count)
+      : undefined,
+  );
   if (qualifierMode === 'match') {
     distributeQualifiedBucketsMatch(qualified, groups);
   } else {
@@ -425,21 +406,17 @@ export function splitBySize(
         'separate',
       );
     }
-  } else {
-    const largest = largestBucketSize(qualified);
-    if (largest && largest.count > size) {
-      throw new QualifierConflictError(
-        largest.qualifier,
-        largest.count,
-        size,
-        'match',
-      );
-    }
   }
-  const groups = emptyGroups(numGroups);
-  const hasCapacity = (g: PlacementGroup) => g.students.length < size;
+  const groups = emptyGroups(
+    numGroups,
+    qualifierMode === 'match'
+      ? balancedTargetSizes(students.length, numGroups)
+      : undefined,
+  );
+  const hasCapacity = (g: PlacementGroup) =>
+    g.students.length < (g.targetSize ?? size);
   if (qualifierMode === 'match') {
-    distributeQualifiedBucketsMatch(qualified, groups, { maxGroupSize: size });
+    distributeQualifiedBucketsMatch(qualified, groups);
   } else {
     distributeQualifiedBucketsSeparate(qualified, groups, {
       extraEligibility: hasCapacity,
@@ -455,10 +432,14 @@ export function splitIntoGroupsBestEffort(
   qualifierMode: QualifierMode = 'separate',
 ): { groups: GeneratedGroup[]; conflicts: QualifierConflict[] } {
   const { qualified, unqualified } = bucketByQualifier(students);
-  const groups = emptyGroups(count);
+  const groups = emptyGroups(
+    count,
+    qualifierMode === 'match'
+      ? balancedTargetSizes(students.length, count)
+      : undefined,
+  );
   const conflicts = new Map<string, ConflictAccumulatorEntry>();
   if (qualifierMode === 'match') {
-    // byGroups match has no hard capacity limit, so no splits are forced.
     distributeQualifiedBucketsMatch(qualified, groups);
   } else {
     distributeQualifiedBucketsSeparate(qualified, groups, {
@@ -484,15 +465,17 @@ export function splitBySizeBestEffort(
   if (students.length === 0) return { groups: [], conflicts: [] };
   const numGroups = Math.ceil(students.length / size);
   const { qualified, unqualified } = bucketByQualifier(students);
-  const groups = emptyGroups(numGroups);
-  const hasCapacity = (g: PlacementGroup) => g.students.length < size;
+  const groups = emptyGroups(
+    numGroups,
+    qualifierMode === 'match'
+      ? balancedTargetSizes(students.length, numGroups)
+      : undefined,
+  );
+  const hasCapacity = (g: PlacementGroup) =>
+    g.students.length < (g.targetSize ?? size);
   const conflicts = new Map<string, ConflictAccumulatorEntry>();
   if (qualifierMode === 'match') {
-    distributeQualifiedBucketsMatch(qualified, groups, {
-      maxGroupSize: size,
-      bestEffort: true,
-      conflicts,
-    });
+    distributeQualifiedBucketsMatch(qualified, groups);
   } else {
     distributeQualifiedBucketsSeparate(qualified, groups, {
       extraEligibility: hasCapacity,

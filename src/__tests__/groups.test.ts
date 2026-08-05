@@ -272,21 +272,15 @@ describe('analyzeQualifierFeasibility', () => {
     ).toEqual({ ok: true });
   });
 
-  it('match mode flags bySize when a bucket exceeds group size', () => {
+  it('match mode allows a bucket to split across size-limited groups', () => {
     const students: ParsedName[] = [
       { display: 'A1', qualifier: 'A' },
       { display: 'A2', qualifier: 'A' },
       { display: 'A3', qualifier: 'A' },
     ];
-    expect(analyzeQualifierFeasibility(students, 'bySize', 2, 'match')).toEqual(
-      {
-        ok: false,
-        qualifier: 'A',
-        count: 3,
-        maxAllowed: 2,
-        mode: 'match',
-      },
-    );
+    expect(analyzeQualifierFeasibility(students, 'bySize', 2, 'match')).toEqual({
+      ok: true,
+    });
   });
 });
 
@@ -446,36 +440,70 @@ describe('qualifier match mode', () => {
     }
   });
 
-  it('throws when a match bucket exceeds group size', () => {
+  it('splits a match bucket when needed and still balances by size', () => {
     const students: ParsedName[] = [
       { display: 'A1', qualifier: 'A' },
       { display: 'A2', qualifier: 'A' },
       { display: 'A3', qualifier: 'A' },
       { display: 'B', qualifier: null },
     ];
-    expect(() => splitBySize(students, 2, 'match')).toThrow(
-      QualifierConflictError,
-    );
+    const groups = splitBySize(students, 2, 'match');
+    expect(groups.map((g) => g.students.length)).toEqual([2, 2]);
+    expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3', 'B']);
   });
 
-  it('best-effort match splits oversized buckets and reports splits', () => {
+  it('creates every requested group and balances the reported 11/9 case', () => {
     const students: ParsedName[] = [
-      { display: 'A1', qualifier: 'A' },
-      { display: 'A2', qualifier: 'A' },
-      { display: 'A3', qualifier: 'A' },
-      { display: 'A4', qualifier: 'A' },
+      ...Array.from({ length: 11 }, (_, i) => ({
+        display: `B${i + 1}`,
+        qualifier: 'B',
+      })),
+      ...Array.from({ length: 9 }, (_, i) => ({
+        display: `G${i + 1}`,
+        qualifier: 'G',
+      })),
     ];
-    const { groups, conflicts } = splitBySizeBestEffort(students, 2, 'match');
-    expect(groups).toHaveLength(2);
-    for (const g of groups) {
-      expect(g.students.length).toBeLessThanOrEqual(2);
+
+    for (let trial = 0; trial < 50; trial++) {
+      const groups = splitIntoGroups(students, 10, 'match');
+      expect(groups).toHaveLength(10);
+      expect(groups.every((g) => g.students.length === 2)).toBe(true);
+      expect(allStudents(groups).sort()).toEqual(
+        students.map((s) => s.display).sort(),
+      );
+
+      const mixedGroups = groups.filter((group) => {
+        const prefixes = new Set(group.students.map((name) => name[0]));
+        return prefixes.size > 1;
+      });
+      expect(mixedGroups).toHaveLength(1);
     }
-    expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3', 'A4']);
-    expect(conflicts).toHaveLength(1);
-    expect(conflicts[0].qualifier).toBe('A');
-    expect(conflicts[0].kind).toBe('split');
-    expect(conflicts[0].count).toBe(2);
-    expect(conflicts[0].groups).toHaveLength(2);
+  });
+
+  it('uses partial groups for tag remainders to preserve later matches', () => {
+    const students: ParsedName[] = [
+      ...Array.from({ length: 3 }, (_, i) => ({
+        display: `A${i + 1}`,
+        qualifier: 'A',
+      })),
+      ...Array.from({ length: 3 }, (_, i) => ({
+        display: `B${i + 1}`,
+        qualifier: 'B',
+      })),
+      ...Array.from({ length: 2 }, (_, i) => ({
+        display: `C${i + 1}`,
+        qualifier: 'C',
+      })),
+    ];
+
+    for (let trial = 0; trial < 50; trial++) {
+      const groups = splitIntoGroups(students, 4, 'match');
+      expect(groups.every((g) => g.students.length === 2)).toBe(true);
+      const sameTagGroups = groups.filter(
+        (g) => g.students[0][0] === g.students[1][0],
+      );
+      expect(sameTagGroups).toHaveLength(3);
+    }
   });
 
   it('marks separate best-effort conflicts as overlap kind', () => {

@@ -120,7 +120,7 @@ export function GroupSettings({
         <p className="mt-2 text-xs text-gray-500">
           {qualifierMode === 'separate'
             ? 'Students with the same parenthetical tag are kept in different groups when possible.'
-            : 'Students with the same parenthetical tag are placed in the same group when possible.'}
+            : 'Groups stay evenly sized while students with the same parenthetical tag are matched when possible.'}
         </p>
       </div>
 
