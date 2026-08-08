@@ -1,9 +1,4 @@
-import type {
-  GeneratedGroup,
-  GroupMode,
-  ParsedName,
-  QualifierMode,
-} from '../types';
+import type { GeneratedGroup, ParsedName, QualifierMode } from '../types';
 import { fisherYatesShuffle } from './shuffle';
 
 export class QualifierConflictError extends Error {
@@ -35,16 +30,6 @@ export class QualifierConflictError extends Error {
   }
 }
 
-export type QualifierFeasibility =
-  | { ok: true }
-  | {
-      ok: false;
-      qualifier: string;
-      count: number;
-      maxAllowed: number;
-      mode: QualifierMode;
-    };
-
 function bucketByQualifier(students: ParsedName[]): {
   qualified: Map<string, ParsedName[]>;
   unqualified: ParsedName[];
@@ -61,50 +46,6 @@ function bucketByQualifier(students: ParsedName[]): {
     }
   }
   return { qualified, unqualified };
-}
-
-function largestBucketSize(qualified: Map<string, ParsedName[]>): {
-  qualifier: string;
-  count: number;
-} | null {
-  let largest: { qualifier: string; count: number } | null = null;
-  for (const [qualifier, list] of qualified) {
-    if (!largest || list.length > largest.count) {
-      largest = { qualifier, count: list.length };
-    }
-  }
-  return largest;
-}
-
-export function analyzeQualifierFeasibility(
-  students: ParsedName[],
-  mode: GroupMode,
-  groupCount: number,
-  qualifierMode: QualifierMode = 'separate',
-): QualifierFeasibility {
-  if (students.length === 0 || groupCount <= 0) return { ok: true };
-  const { qualified } = bucketByQualifier(students);
-  const largest = largestBucketSize(qualified);
-  if (!largest) return { ok: true };
-
-  if (qualifierMode === 'match') {
-    // Matching is a preference, so splitting a tag across balanced groups is
-    // always allowed.
-    return { ok: true };
-  }
-
-  const maxAllowed =
-    mode === 'byGroups' ? groupCount : Math.ceil(students.length / groupCount);
-  if (largest.count > maxAllowed) {
-    return {
-      ok: false,
-      qualifier: largest.qualifier,
-      count: largest.count,
-      maxAllowed,
-      mode: 'separate',
-    };
-  }
-  return { ok: true };
 }
 
 interface PlacementGroup {
@@ -362,17 +303,6 @@ export function splitIntoGroups(
   qualifierMode: QualifierMode = 'separate',
 ): GeneratedGroup[] {
   const { qualified, unqualified } = bucketByQualifier(students);
-  if (qualifierMode === 'separate') {
-    const largest = largestBucketSize(qualified);
-    if (largest && largest.count > count) {
-      throw new QualifierConflictError(
-        largest.qualifier,
-        largest.count,
-        count,
-        'separate',
-      );
-    }
-  }
   const groups = emptyGroups(
     count,
     qualifierMode === 'match'
@@ -382,7 +312,7 @@ export function splitIntoGroups(
   if (qualifierMode === 'match') {
     distributeQualifiedBucketsMatch(qualified, groups);
   } else {
-    distributeQualifiedBucketsSeparate(qualified, groups);
+    distributeQualifiedBucketsSeparate(qualified, groups, { bestEffort: true });
   }
   distributeUnqualified(unqualified, groups);
   return finalize(groups);
@@ -396,17 +326,6 @@ export function splitBySize(
   if (students.length === 0) return [];
   const numGroups = Math.ceil(students.length / size);
   const { qualified, unqualified } = bucketByQualifier(students);
-  if (qualifierMode === 'separate') {
-    const largest = largestBucketSize(qualified);
-    if (largest && largest.count > numGroups) {
-      throw new QualifierConflictError(
-        largest.qualifier,
-        largest.count,
-        numGroups,
-        'separate',
-      );
-    }
-  }
   const groups = emptyGroups(
     numGroups,
     qualifierMode === 'match'
@@ -420,6 +339,7 @@ export function splitBySize(
   } else {
     distributeQualifiedBucketsSeparate(qualified, groups, {
       extraEligibility: hasCapacity,
+      bestEffort: true,
     });
   }
   distributeUnqualified(unqualified, groups, hasCapacity);

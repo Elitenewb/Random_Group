@@ -14,8 +14,6 @@ interface GroupSettingsProps {
   validationMessage: string | null;
   hasGroups: boolean;
   onGenerate: () => void;
-  qualifierBlocked?: boolean;
-  onGenerateBestEffort?: () => void;
 }
 
 export function GroupSettings({
@@ -32,8 +30,6 @@ export function GroupSettings({
   validationMessage,
   hasGroups,
   onGenerate,
-  qualifierBlocked = false,
-  onGenerateBestEffort,
 }: GroupSettingsProps) {
   const maxGroups = studentCount;
   const minGroups = groupMode === 'byGroups' ? 2 : 1;
@@ -173,16 +169,6 @@ export function GroupSettings({
 
       {validationMessage && (
         <p className="text-sm text-amber-600">{validationMessage}</p>
-      )}
-
-      {qualifierBlocked && onGenerateBestEffort && (
-        <button
-          type="button"
-          onClick={onGenerateBestEffort}
-          className="text-left text-sm font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-        >
-          Generate anyway (best effort)
-        </button>
       )}
 
       <button

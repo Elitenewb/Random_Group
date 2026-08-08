@@ -1,49 +1,17 @@
 import type { GeneratedGroup } from '../types';
-import type { QualifierConflict } from '../utils/groups';
 import { GroupCard } from './GroupCard';
 
 interface GroupResultsProps {
   groups: GeneratedGroup[];
   title: string;
   presentMode: boolean;
-  conflicts?: QualifierConflict[];
-}
-
-function formatConflictsMessage(conflicts: QualifierConflict[]): string {
-  const total = conflicts.reduce((acc, c) => acc + c.count, 0);
-  const kind = conflicts[0]?.kind ?? 'overlap';
-  const parts = conflicts.map((c) => {
-    const clause =
-      c.kind === 'split'
-        ? `'${c.qualifier}' split ${c.count} ${
-            c.count === 1 ? 'member' : 'members'
-          }`
-        : `'${c.qualifier}' shares a group ${c.count} ${
-            c.count === 1 ? 'time' : 'times'
-          }`;
-    if (c.groups.length === 0) return clause;
-    return `${clause} (${c.groups.join(', ')})`;
-  });
-  const noun =
-    kind === 'split'
-      ? total === 1
-        ? 'split'
-        : 'splits'
-      : total === 1
-        ? 'conflict'
-        : 'conflicts';
-  return `Generated with ${total} ${noun}: ${parts.join(', ')}.`;
 }
 
 export function GroupResults({
   groups,
   title,
   presentMode,
-  conflicts,
 }: GroupResultsProps) {
-  const showConflicts =
-    !presentMode && conflicts !== undefined && conflicts.length > 0;
-
   return (
     <div>
       {title && (
@@ -54,11 +22,6 @@ export function GroupResults({
         >
           {title}
         </h2>
-      )}
-      {showConflicts && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 no-print">
-          {formatConflictsMessage(conflicts!)}
-        </div>
       )}
       <div
         className={`grid gap-4 ${

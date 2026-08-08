@@ -2,14 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { parseNames, dedupeNames } from './utils/names';
-import {
-  splitIntoGroups,
-  splitBySize,
-  splitIntoGroupsBestEffort,
-  splitBySizeBestEffort,
-  analyzeQualifierFeasibility,
-  type QualifierConflict,
-} from './utils/groups';
+import { splitIntoGroups, splitBySize } from './utils/groups';
 import { pickRandom } from './utils/shuffle';
 import {
   pickAndRemoveOne,
@@ -29,7 +22,6 @@ import { RandomPickResult } from './components/RandomPickResult';
 export default function App() {
   const { state, updateState } = useAppState();
   const [groups, setGroups] = useState<GeneratedGroup[]>([]);
-  const [conflicts, setConflicts] = useState<QualifierConflict[]>([]);
   const [presentMode, setPresentMode] = useState(() =>
     isTouchPrimaryDevice(),
   );
@@ -62,7 +54,6 @@ export default function App() {
   useEffect(() => {
     setEliminationRemaining([]);
     setPickedStudent(null);
-    setConflicts([]);
   }, [parsedNamesKey]);
 
   const studentCount = parsedNames.length;
@@ -72,25 +63,13 @@ export default function App() {
     [parsedNames],
   );
 
-  const qualifierFeasibility = useMemo(
-    () =>
-      analyzeQualifierFeasibility(
-        parsedNames,
-        state.groupMode,
-        state.groupCount,
-        state.qualifierMode,
-      ),
-    [parsedNames, state.groupMode, state.groupCount, state.qualifierMode],
-  );
-
   const canGenerate = useMemo(() => {
     if (studentCount < 2) return false;
-    if (!qualifierFeasibility.ok) return false;
     if (state.groupMode === 'byGroups') {
       return state.groupCount >= 2 && state.groupCount <= studentCount;
     }
     return state.groupCount >= 1 && state.groupCount <= studentCount;
-  }, [studentCount, state.groupCount, state.groupMode, qualifierFeasibility]);
+  }, [studentCount, state.groupCount, state.groupMode]);
 
   const validationMessage = useMemo(() => {
     if (studentCount < 2) return 'Add at least 2 students to generate groups.';
@@ -103,29 +82,8 @@ export default function App() {
       if (state.groupCount > studentCount)
         return 'Group size cannot exceed number of students.';
     }
-    if (!qualifierFeasibility.ok) {
-      if (qualifierFeasibility.mode === 'match') {
-        return `Qualifier '${qualifierFeasibility.qualifier}' has ${qualifierFeasibility.count} members but groups only hold ${qualifierFeasibility.maxAllowed} student${
-          qualifierFeasibility.maxAllowed === 1 ? '' : 's'
-        }.`;
-      }
-      return `Qualifier '${qualifierFeasibility.qualifier}' has ${qualifierFeasibility.count} members but only ${qualifierFeasibility.maxAllowed} group${
-        qualifierFeasibility.maxAllowed === 1 ? '' : 's'
-      } are available.`;
-    }
     return null;
-  }, [studentCount, state.groupCount, state.groupMode, qualifierFeasibility]);
-
-  const qualifierBlocked = !qualifierFeasibility.ok;
-
-  const canGenerateBestEffort = useMemo(() => {
-    if (!qualifierBlocked) return false;
-    if (studentCount < 2) return false;
-    if (state.groupMode === 'byGroups') {
-      return state.groupCount >= 2 && state.groupCount <= studentCount;
-    }
-    return state.groupCount >= 1 && state.groupCount <= studentCount;
-  }, [qualifierBlocked, studentCount, state.groupCount, state.groupMode]);
+  }, [studentCount, state.groupCount, state.groupMode]);
 
   const handleGenerate = useCallback(() => {
     if (!canGenerate) return;
@@ -134,33 +92,8 @@ export default function App() {
         ? splitIntoGroups(parsedNames, state.groupCount, state.qualifierMode)
         : splitBySize(parsedNames, state.groupCount, state.qualifierMode);
     setGroups(result);
-    setConflicts([]);
   }, [
     canGenerate,
-    parsedNames,
-    state.groupCount,
-    state.groupMode,
-    state.qualifierMode,
-  ]);
-
-  const handleGenerateBestEffort = useCallback(() => {
-    if (!canGenerateBestEffort) return;
-    const result =
-      state.groupMode === 'byGroups'
-        ? splitIntoGroupsBestEffort(
-            parsedNames,
-            state.groupCount,
-            state.qualifierMode,
-          )
-        : splitBySizeBestEffort(
-            parsedNames,
-            state.groupCount,
-            state.qualifierMode,
-          );
-    setGroups(result.groups);
-    setConflicts(result.conflicts);
-  }, [
-    canGenerateBestEffort,
     parsedNames,
     state.groupCount,
     state.groupMode,
@@ -314,7 +247,6 @@ export default function App() {
                   groups={groups}
                   title={state.title}
                   presentMode={presentMode}
-                  conflicts={conflicts}
                 />
                 <Toolbar
                   groups={groups}
@@ -441,15 +373,6 @@ export default function App() {
                     {validationMessage}
                   </p>
                 ) : null}
-                {qualifierBlocked && canGenerateBestEffort ? (
-                  <button
-                    type="button"
-                    onClick={handleGenerateBestEffort}
-                    className="no-print text-center text-sm font-medium text-blue-400 underline underline-offset-2 hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-                  >
-                    Generate anyway (best effort)
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   onClick={handleGenerate}
@@ -492,8 +415,6 @@ export default function App() {
                   validationMessage={validationMessage}
                   hasGroups={groups.length > 0}
                   onGenerate={handleGenerate}
-                  qualifierBlocked={qualifierBlocked && canGenerateBestEffort}
-                  onGenerateBestEffort={handleGenerateBestEffort}
                 />
               </div>
             )}

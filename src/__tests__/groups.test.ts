@@ -4,8 +4,6 @@ import {
   splitBySize,
   splitIntoGroupsBestEffort,
   splitBySizeBestEffort,
-  analyzeQualifierFeasibility,
-  QualifierConflictError,
 } from '../utils/groups';
 import type { ParsedName } from '../types';
 
@@ -166,14 +164,16 @@ describe('qualifier-aware splitIntoGroups', () => {
     expect(all.sort()).toEqual(['Alice', 'Bob', 'Charlie']);
   });
 
-  it('throws QualifierConflictError when a qualifier has more members than groups', () => {
+  it('still generates when a qualifier has more members than groups', () => {
     const students: ParsedName[] = [
       { display: 'A1', qualifier: 'A' },
       { display: 'A2', qualifier: 'A' },
       { display: 'A3', qualifier: 'A' },
       { display: 'B', qualifier: null },
     ];
-    expect(() => splitIntoGroups(students, 2)).toThrow(QualifierConflictError);
+    const groups = splitIntoGroups(students, 2);
+    expect(groups).toHaveLength(2);
+    expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3', 'B']);
   });
 });
 
@@ -206,81 +206,16 @@ describe('qualifier-aware splitBySize', () => {
     }
   });
 
-  it('throws when a qualifier bucket exceeds the resulting group count', () => {
+  it('still generates when a qualifier bucket exceeds the resulting group count', () => {
     const students: ParsedName[] = [
       { display: 'A1', qualifier: 'A' },
       { display: 'A2', qualifier: 'A' },
       { display: 'A3', qualifier: 'A' },
       { display: 'B', qualifier: null },
     ];
-    expect(() => splitBySize(students, 2)).toThrow(QualifierConflictError);
-  });
-});
-
-describe('analyzeQualifierFeasibility', () => {
-  it('returns ok when all qualifier buckets fit', () => {
-    const students: ParsedName[] = [
-      { display: 'A1', qualifier: 'A' },
-      { display: 'A2', qualifier: 'A' },
-      { display: 'B', qualifier: null },
-    ];
-    expect(analyzeQualifierFeasibility(students, 'byGroups', 2)).toEqual({
-      ok: true,
-    });
-  });
-
-  it('flags byGroups conflict with the offending qualifier', () => {
-    const students: ParsedName[] = [
-      { display: 'A1', qualifier: 'A' },
-      { display: 'A2', qualifier: 'A' },
-      { display: 'A3', qualifier: 'A' },
-    ];
-    expect(analyzeQualifierFeasibility(students, 'byGroups', 2)).toEqual({
-      ok: false,
-      qualifier: 'A',
-      count: 3,
-      maxAllowed: 2,
-      mode: 'separate',
-    });
-  });
-
-  it('flags bySize conflict using the computed number of groups', () => {
-    const students: ParsedName[] = [
-      { display: 'A1', qualifier: 'A' },
-      { display: 'A2', qualifier: 'A' },
-      { display: 'A3', qualifier: 'A' },
-      { display: 'B', qualifier: null },
-    ];
-    expect(analyzeQualifierFeasibility(students, 'bySize', 2)).toEqual({
-      ok: false,
-      qualifier: 'A',
-      count: 3,
-      maxAllowed: 2,
-      mode: 'separate',
-    });
-  });
-
-  it('match mode allows large buckets for byGroups', () => {
-    const students: ParsedName[] = [
-      { display: 'A1', qualifier: 'A' },
-      { display: 'A2', qualifier: 'A' },
-      { display: 'A3', qualifier: 'A' },
-      { display: 'A4', qualifier: 'A' },
-    ];
-    expect(
-      analyzeQualifierFeasibility(students, 'byGroups', 2, 'match'),
-    ).toEqual({ ok: true });
-  });
-
-  it('match mode allows a bucket to split across size-limited groups', () => {
-    const students: ParsedName[] = [
-      { display: 'A1', qualifier: 'A' },
-      { display: 'A2', qualifier: 'A' },
-      { display: 'A3', qualifier: 'A' },
-    ];
-    expect(analyzeQualifierFeasibility(students, 'bySize', 2, 'match')).toEqual({
-      ok: true,
-    });
+    const groups = splitBySize(students, 2);
+    expect(groups).toHaveLength(2);
+    expect(allStudents(groups).sort()).toEqual(['A1', 'A2', 'A3', 'B']);
   });
 });
 
@@ -367,27 +302,6 @@ describe('splitBySizeBestEffort', () => {
     expect(conflicts[0].count).toBe(2);
     expect(conflicts[0].groups.length).toBeGreaterThanOrEqual(1);
     expect(conflicts[0].groups.length).toBeLessThanOrEqual(2);
-  });
-});
-
-describe('strict functions still throw with the same inputs', () => {
-  it('splitIntoGroups throws when best-effort would be needed', () => {
-    const students: ParsedName[] = [
-      { display: 'A1', qualifier: 'A' },
-      { display: 'A2', qualifier: 'A' },
-      { display: 'A3', qualifier: 'A' },
-    ];
-    expect(() => splitIntoGroups(students, 2)).toThrow(QualifierConflictError);
-  });
-
-  it('splitBySize throws when best-effort would be needed', () => {
-    const students: ParsedName[] = [
-      { display: 'A1', qualifier: 'A' },
-      { display: 'A2', qualifier: 'A' },
-      { display: 'A3', qualifier: 'A' },
-      { display: 'A4', qualifier: 'A' },
-    ];
-    expect(() => splitBySize(students, 2)).toThrow(QualifierConflictError);
   });
 });
 
